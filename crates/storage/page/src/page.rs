@@ -1,3 +1,6 @@
+use crate::header;
+use crate::header::{HEADER_SIZE, HeaderRef};
+
 const PAGE_SIZE: usize = 4096;
 
 struct Page {
@@ -9,5 +12,9 @@ impl Page {
         Self {
             data: [0; PAGE_SIZE],
         }
+    }
+
+    fn header_ref(&'_ self) -> HeaderRef<'_> {
+        HeaderRef::new(&self.data[..HEADER_SIZE]).unwrap()
     }
 }

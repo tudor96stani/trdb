@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/storage/binary-helpers", "crates/storage/buffer", "crates/storage/file", "crates/storage/page", "crates/storage/storage-api"]
+members = ["crates/storage/binary-helpers", "crates/storage/buffer", "crates/storage/file", "crates/storage/page", "crates/storage/storage-api", "trdb"]
 
 [workspace.lints.clippy]
 all = "warn"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-unused_crate_dependencies = "warn"
+unused_crate_dependencies = "allow"
 unused_imports = "warn"
 missing_docs = "allow"
 missing_debug_implementations = "warn"
