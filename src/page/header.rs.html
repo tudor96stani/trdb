@@ -9,16 +9,16 @@
 <a href=#9 id=9 data-nosnippet>9</a>//!
 <a href=#10 id=10 data-nosnippet>10</a>//! | Field          | Type  | Offset | Description |
 <a href=#11 id=11 data-nosnippet>11</a>//! |----------------|-------|--------|-------------|
-<a href=#12 id=12 data-nosnippet>12</a>//! | `slot_count`   | u16   | [`HDR_SLOT_COUNT`]   | Number of active slots in the page. |
-<a href=#13 id=13 data-nosnippet>13</a>//! | `free_start`   | u16   | [`HDR_FREE_START`]   | Beginning of the free-space region (grows upward). |
-<a href=#14 id=14 data-nosnippet>14</a>//! | `free_end`     | u16   | [`HDR_FREE_END`]     | End of the free-space region (grows downward). |
-<a href=#15 id=15 data-nosnippet>15</a>//! | `free_space`   | u16   | [`HDR_FREE_SPACE`]   | Total number of free bytes available. |
-<a href=#16 id=16 data-nosnippet>16</a>//! | `can_compact`  | u16   | [`HDR_CAN_COMPACT`]  | Whether the page requires compaction (0 or 1). |
-<a href=#17 id=17 data-nosnippet>17</a>//! | `page_number`  | u16   | [`HDR_PAGE_NUMBER`]  | Logical page identifier within the file. |
-<a href=#18 id=18 data-nosnippet>18</a>//! | `page_type`    | u16   | [`HDR_PAGE_TYPE`]    | Page classification (data, internal, etc.). |
-<a href=#19 id=19 data-nosnippet>19</a>//! | `left_page`    | u32   | [`HDR_LEFT_PAGE`]    | Pointer to the left sibling page (if any). |
-<a href=#20 id=20 data-nosnippet>20</a>//! | `right_page`   | u32   | [`HDR_RIGHT_PAGE`]   | Pointer to the right sibling page (if any). |
-<a href=#21 id=21 data-nosnippet>21</a>//! | `last_lsn`     | u64   | [`HDR_LAST_LSN`]     | Last log sequence number applied to this page. |
+<a href=#12 id=12 data-nosnippet>12</a>//! | `slot_count`   | u16   | [`SLOT_COUNT`]   | Number of active slots in the page. |
+<a href=#13 id=13 data-nosnippet>13</a>//! | `free_start`   | u16   | [`FREE_START`]   | Beginning of the free-space region (grows upward). |
+<a href=#14 id=14 data-nosnippet>14</a>//! | `free_end`     | u16   | [`FREE_END`]     | End of the free-space region (grows downward). |
+<a href=#15 id=15 data-nosnippet>15</a>//! | `free_space`   | u16   | [`FREE_SPACE`]   | Total number of free bytes available. |
+<a href=#16 id=16 data-nosnippet>16</a>//! | `can_compact`  | u16   | [`CAN_COMPACT`]  | Whether the page requires compaction (0 or 1). |
+<a href=#17 id=17 data-nosnippet>17</a>//! | `page_number`  | u16   | [`PAGE_NUMBER`]  | Logical page identifier within the file. |
+<a href=#18 id=18 data-nosnippet>18</a>//! | `page_type`    | u16   | [`PAGE_TYPE`]    | Page classification (data, internal, etc.). |
+<a href=#19 id=19 data-nosnippet>19</a>//! | `left_page`    | u32   | [`LEFT_PAGE`]    | Pointer to the left sibling page (if any). |
+<a href=#20 id=20 data-nosnippet>20</a>//! | `right_page`   | u32   | [`RIGHT_PAGE`]   | Pointer to the right sibling page (if any). |
+<a href=#21 id=21 data-nosnippet>21</a>//! | `last_lsn`     | u64   | [`LAST_LSN`]     | Last log sequence number applied to this page. |
 <a href=#22 id=22 data-nosnippet>22</a>//!
 <a href=#23 id=23 data-nosnippet>23</a>//! ## Notes
 <a href=#24 id=24 data-nosnippet>24</a>//!

@@ -5,16 +5,16 @@ relationship to neighboring pages. All fields are stored in <strong>little-endia
 binary format.</p>
 <p>The layout is as follows:</p>
 <div><table><thead><tr><th>Field</th><th>Type</th><th>Offset</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>slot_count</code></td><td>u16</td><td>[<code>HDR_SLOT_COUNT</code>]</td><td>Number of active slots in the page.</td></tr>
-<tr><td><code>free_start</code></td><td>u16</td><td>[<code>HDR_FREE_START</code>]</td><td>Beginning of the free-space region (grows upward).</td></tr>
-<tr><td><code>free_end</code></td><td>u16</td><td>[<code>HDR_FREE_END</code>]</td><td>End of the free-space region (grows downward).</td></tr>
-<tr><td><code>free_space</code></td><td>u16</td><td>[<code>HDR_FREE_SPACE</code>]</td><td>Total number of free bytes available.</td></tr>
-<tr><td><code>can_compact</code></td><td>u16</td><td>[<code>HDR_CAN_COMPACT</code>]</td><td>Whether the page requires compaction (0 or 1).</td></tr>
-<tr><td><code>page_number</code></td><td>u16</td><td>[<code>HDR_PAGE_NUMBER</code>]</td><td>Logical page identifier within the file.</td></tr>
-<tr><td><code>page_type</code></td><td>u16</td><td>[<code>HDR_PAGE_TYPE</code>]</td><td>Page classification (data, internal, etc.).</td></tr>
-<tr><td><code>left_page</code></td><td>u32</td><td>[<code>HDR_LEFT_PAGE</code>]</td><td>Pointer to the left sibling page (if any).</td></tr>
-<tr><td><code>right_page</code></td><td>u32</td><td>[<code>HDR_RIGHT_PAGE</code>]</td><td>Pointer to the right sibling page (if any).</td></tr>
-<tr><td><code>last_lsn</code></td><td>u64</td><td>[<code>HDR_LAST_LSN</code>]</td><td>Last log sequence number applied to this page.</td></tr>
+<tr><td><code>slot_count</code></td><td>u16</td><td><a href="constant.SLOT_COUNT.html" title="constant page::header::SLOT_COUNT"><code>SLOT_COUNT</code></a></td><td>Number of active slots in the page.</td></tr>
+<tr><td><code>free_start</code></td><td>u16</td><td><a href="constant.FREE_START.html" title="constant page::header::FREE_START"><code>FREE_START</code></a></td><td>Beginning of the free-space region (grows upward).</td></tr>
+<tr><td><code>free_end</code></td><td>u16</td><td><a href="constant.FREE_END.html" title="constant page::header::FREE_END"><code>FREE_END</code></a></td><td>End of the free-space region (grows downward).</td></tr>
+<tr><td><code>free_space</code></td><td>u16</td><td><a href="constant.FREE_SPACE.html" title="constant page::header::FREE_SPACE"><code>FREE_SPACE</code></a></td><td>Total number of free bytes available.</td></tr>
+<tr><td><code>can_compact</code></td><td>u16</td><td><a href="constant.CAN_COMPACT.html" title="constant page::header::CAN_COMPACT"><code>CAN_COMPACT</code></a></td><td>Whether the page requires compaction (0 or 1).</td></tr>
+<tr><td><code>page_number</code></td><td>u16</td><td><a href="constant.PAGE_NUMBER.html" title="constant page::header::PAGE_NUMBER"><code>PAGE_NUMBER</code></a></td><td>Logical page identifier within the file.</td></tr>
+<tr><td><code>page_type</code></td><td>u16</td><td><a href="constant.PAGE_TYPE.html" title="constant page::header::PAGE_TYPE"><code>PAGE_TYPE</code></a></td><td>Page classification (data, internal, etc.).</td></tr>
+<tr><td><code>left_page</code></td><td>u32</td><td><a href="constant.LEFT_PAGE.html" title="constant page::header::LEFT_PAGE"><code>LEFT_PAGE</code></a></td><td>Pointer to the left sibling page (if any).</td></tr>
+<tr><td><code>right_page</code></td><td>u32</td><td><a href="constant.RIGHT_PAGE.html" title="constant page::header::RIGHT_PAGE"><code>RIGHT_PAGE</code></a></td><td>Pointer to the right sibling page (if any).</td></tr>
+<tr><td><code>last_lsn</code></td><td>u64</td><td><a href="constant.LAST_LSN.html" title="constant page::header::LAST_LSN"><code>LAST_LSN</code></a></td><td>Last log sequence number applied to this page.</td></tr>
 </tbody></table>
 </div><h3 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h3>
 <ul>
