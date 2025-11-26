@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# Fail fast
+set -e
+
+# Format code
+cargo fmt --all
+
+# Lint
+cargo clippy --workspace --all-targets -- -D warnings
+
+# Run normal tests via nextest
+cargo nextest run
+
+# Run doctests
+cargo test --workspace --doc
+
+# If everything passed, commit continues automatically
