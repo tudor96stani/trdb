@@ -14,3 +14,4 @@ missing_debug_implementations = "warn"
 
 [workspace.dependencies]
 thiserror = "2.0.17"
+paste = "1.0.15"
