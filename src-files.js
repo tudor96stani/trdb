@@ -1,2 +1,2 @@
-createSrcSidebar('[["binary_helpers",["",[],["bin_error.rs","le.rs","lib.rs"]]],["buffer",["",[],["lib.rs"]]],["file",["",[],["lib.rs"]]],["page",["",[],["header.rs","lib.rs","page.rs","page_error.rs"]]],["storage_api",["",[],["lib.rs"]]]]');
-//{"start":19,"fragment_lengths":[60,30,28,66,35]}
+createSrcSidebar('[["binary_helpers",["",[],["bin_error.rs","le.rs","lib.rs"]]],["buffer",["",[],["lib.rs"]]],["file",["",[],["lib.rs"]]],["page",["",[],["header.rs","lib.rs","page.rs","page_error.rs"]]],["storage_api",["",[],["lib.rs"]]],["trdb",["",[],["main.rs"]]]]');
+//{"start":19,"fragment_lengths":[60,30,28,66,35,29]}
