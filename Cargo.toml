@@ -1,6 +1,25 @@
+[package]
+name = "trdb"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "trdb"
+path = "src/main.rs"
+
 [workspace]
 resolver = "3"
-members = ["crates/storage/binary-helpers", "crates/storage/buffer", "crates/storage/file", "crates/storage/page", "crates/storage/storage-api", "trdb"]
+members = [".",
+    "crates/storage/binary-helpers",
+    "crates/storage/buffer",
+    "crates/storage/file",
+    "crates/storage/page",
+    "crates/storage/storage-api"
+]
 
 [workspace.lints.clippy]
 all = "warn"
