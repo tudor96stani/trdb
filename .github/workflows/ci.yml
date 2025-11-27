@@ -41,12 +41,9 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Run tests with coverage
-        run: cargo llvm-cov
-
-      - name: Add coverage summary
+      - name: Run coverage (single step)
         run: |
-          cargo llvm-cov --summary-only > coverage.txt
+          cargo llvm-cov --summary-only | tee coverage.txt
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           cat coverage.txt >> $GITHUB_STEP_SUMMARY
