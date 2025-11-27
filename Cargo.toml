@@ -9,7 +9,7 @@ all = "warn"
 unsafe_code = "forbid"
 unused_crate_dependencies = "allow"
 unused_imports = "warn"
-missing_docs = "allow"
+missing_docs = "warn"
 missing_debug_implementations = "warn"
 
 [workspace.dependencies]

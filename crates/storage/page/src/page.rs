@@ -1,3 +1,4 @@
+//! Slotted structure and related functionality.
 use crate::header;
 use crate::header::{HEADER_SIZE, HeaderRef};
 

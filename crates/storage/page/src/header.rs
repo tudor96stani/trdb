@@ -1,3 +1,5 @@
+//! Module defining the layout and accessors for the page header in a slotted page.
+//!
 //! # Page Header Layout
 //!
 //! The page header occupies the first **128 bytes** of every slotted page and
@@ -102,6 +104,7 @@ macro_rules! impl_header_accessors {
     ( $( $field_name:ident : $field_type:ty = $field_offset:expr ; )* ) => {
         paste! {
             $(
+                #[doc = concat!("Offset of ", stringify!($field_name), " — type ", stringify!($field_type))]
                 pub const [<$field_name:upper>] : usize = $field_offset;
 
                 impl<'a> HeaderRef<'a> {
