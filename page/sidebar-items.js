@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["header","page_error"]};
+window.SIDEBAR_ITEMS = {"mod":["header","page","page_error"]};
