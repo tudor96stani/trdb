@@ -147,16 +147,13 @@ mod write_le_test {
         // Attempt to write a u32 into a 3-byte buffer -> should be BytesSliceSizeMismatch
         let mut buf = [0u8; 3];
         let err = write_le::<u32>(&mut buf, 0, 1u32).unwrap_err();
-        match err {
+        assert!(matches!(
+            err,
             BinaryError::BytesSliceSizeMismatch {
-                expected,
-                from_offset,
-            } => {
-                assert_eq!(expected, 4);
-                assert_eq!(from_offset, 0);
+                expected: 4,
+                from_offset: 0
             }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        ));
     }
 
     #[test]
@@ -166,16 +163,13 @@ mod write_le_test {
         let val: u16 = 0x1234;
         let mut target = [0u8; 1]; // too small to hold a u16 when writing at offset 0
         let err = write_le::<u16>(&mut target, 0, val).unwrap_err();
-        match err {
+        assert!(matches!(
+            err,
             BinaryError::BytesSliceSizeMismatch {
-                expected,
-                from_offset,
-            } => {
-                assert_eq!(expected, 2); // u16 is 2 bytes
-                assert_eq!(from_offset, 0); // attempted from offset 0
+                expected: 2,
+                from_offset: 0
             }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        ));
     }
 }
 
@@ -217,16 +211,13 @@ mod read_le_tests {
         // Attempt to read a u32 from a 3-byte slice -> should be BytesSliceSizeMismatch
         let bytes = [0u8; 3];
         let err = read_le::<u32>(&bytes, 0).unwrap_err();
-        match err {
+        assert!(matches!(
+            err,
             BinaryError::BytesSliceSizeMismatch {
-                expected,
-                from_offset,
-            } => {
-                assert_eq!(expected, 4);
-                assert_eq!(from_offset, 0);
+                expected: 4,
+                from_offset: 0
             }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        ));
     }
 
     #[test]
@@ -234,16 +225,13 @@ mod read_le_tests {
         // 5 bytes total, reading u32 at offset 3 requires bytes 3..7 -> out of bounds
         let bytes = [0u8; 5];
         let err = read_le::<u32>(&bytes, 3).unwrap_err();
-        match err {
+        assert!(matches!(
+            err,
             BinaryError::BytesSliceSizeMismatch {
-                expected,
-                from_offset,
-            } => {
-                assert_eq!(expected, 4);
-                assert_eq!(from_offset, 3);
+                expected: 4,
+                from_offset: 3
             }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        ));
     }
 
     #[test]
@@ -251,16 +239,13 @@ mod read_le_tests {
         // replaced direct from_le call with read_le to exercise the public API
         let small = [0x01u8, 0x02u8]; // length 2, but u32 expects 4
         let err = read_le::<u32>(&small, 0).unwrap_err();
-        match err {
+        assert!(matches!(
+            err,
             BinaryError::BytesSliceSizeMismatch {
-                expected,
-                from_offset,
-            } => {
-                assert_eq!(expected, 4);
-                assert_eq!(from_offset, 0);
+                expected: 4,
+                from_offset: 0
             }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        ));
     }
 }
 
@@ -280,16 +265,13 @@ mod from_le_tests {
     fn test_from_le_invalid_size() {
         let small = [1u8, 2u8]; // length 2, but u32 expects 4
         let err = <u32 as LittleEndianInteger>::from_le(&small).unwrap_err();
-        match err {
+        assert!(matches!(
+            err,
             BinaryError::BytesSliceSizeMismatch {
-                expected,
-                from_offset,
-            } => {
-                assert_eq!(expected, 4);
-                assert_eq!(from_offset, 0);
+                expected: 4,
+                from_offset: 0
             }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        ));
     }
 }
 
@@ -311,12 +293,9 @@ mod to_le_tests {
         let val: u32 = 0x11223344;
         let mut target = [0u8; 3]; // too small
         let err = <u32 as LittleEndianInteger>::to_le(val, &mut target).unwrap_err();
-        match err {
-            BinaryError::WriteErrorSliceSizeMismatch { src, target } => {
-                assert_eq!(src, 4);
-                assert_eq!(target, 3);
-            }
-            _ => panic!("unexpected error variant: {:?}", err),
-        }
+        assert!(matches!(
+            err,
+            BinaryError::WriteErrorSliceSizeMismatch { src: 4, target: 3 }
+        ));
     }
 }
