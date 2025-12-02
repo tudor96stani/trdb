@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["read_le","write_le"],"trait":["LittleEndianInteger"]};
+window.SIDEBAR_ITEMS = {"fn":["read_le","write_le"],"macro":["impl_little_endian_integer"],"trait":["LittleEndianInteger"]};

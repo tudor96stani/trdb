@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SLOT_SIZE"],"struct":["SlotMut","SlotRef"]};

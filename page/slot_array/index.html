@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Slot Array Handling for Slotted Pages"><title>page::slot_array - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="page" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module slot_array</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../page/index.html">page</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module slot_<wbr>array</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#slot-array-handling-for-slotted-pages" title="Slot Array Handling for Slotted Pages">Slot Array Handling for Slotted Pages</a></li><li><a href="#reverse-right-to-left-slot-ordering" title="Reverse (Right-to-Left) Slot Ordering">Reverse (Right-to-Left) Slot Ordering</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate page</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">page</a></div><h1>Module <span>slot_<wbr>array</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/page/slot_array.rs.html#1-315">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h3 id="slot-array-handling-for-slotted-pages"><a class="doc-anchor" href="#slot-array-handling-for-slotted-pages">§</a>Slot Array Handling for Slotted Pages</h3>
+<p>This module provides zero-copy immutable and mutable views
+(<code>SlotArrayRef</code> and <code>SlotArrayMut</code>) into the <em>slot array region</em> of a slotted
+database page. The slot array is a compact structure containing fixed-size
+slots, each describing the offset and length of a tuple stored
+elsewhere on the page.</p>
+<h2 id="reverse-right-to-left-slot-ordering"><a class="doc-anchor" href="#reverse-right-to-left-slot-ordering">§</a>Reverse (Right-to-Left) Slot Ordering</h2>
+<p>The slot array grows <strong>inward from the end of the page</strong> toward the beginning.
+This design avoids shifting large memory regions whenever a new slot is
+added: new slots simply extend into free space from the <em>right side</em>.</p>
+<p>Consequently, <strong>logical slot index 0 corresponds to the <em>last</em> SLOT_SIZE
+chunk in the slot array slice</strong>, and slot indices increase leftwards.</p>
+<p>In other words, if the slot array byte region is <code>[start .. end)</code>,
+then the in-memory layout is reversed:</p>
+<div class="example-wrap"><pre class="language-text"><code>  Lower memory addresses                             Higher addresses
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                           Slot Array                             │
+  └──────────────────────────────────────────────────────────────────┘
+
+  [slot_count - 1]   [slot_count - 2]          ...          [1]   [0]
+       ┌───────┐         ┌───────┐                            ┌───────┐
+       │ SlotN │         │ SlotN │                            │ Slot0 │
+       └───────┘         └───────┘                            └───────┘
+
+       ^ increasing slot_index →
+
+Mapping formula:
+
+    physical_start = slot_array_len - (slot_index + 1) * SLOT_SIZE
+    physical_end   = physical_start + SLOT_SIZE
+
+Each slot is therefore addressed relative to the *end* of the region.
+
+# Zero-Copy Access
+
+These types never own memory. They merely borrow a slice of the page:
+
+- `SlotArrayRef&lt;&#39;a&gt;`: borrows `&amp;&#39;a [u8]`
+- `SlotArrayMut&lt;&#39;a&gt;`: borrows `&amp;&#39;a mut [u8]`
+
+Slot access returns lightweight zero-copy views:
+
+- `SlotRef&lt;&#39;a&gt;` for reading a slot
+- `SlotMut&lt;&#39;a&gt;` for modifying it
+
+The module performs strict length and bounds verification at construction,
+ensuring the provided byte region is exactly `slot_count * SLOT_SIZE`.</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.SlotArrayMut.html" title="struct page::slot_array::SlotArrayMut">Slot<wbr>Array<wbr>Mut</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Mutable zero-copy view into the slot array of a slotted page.</dd><dt><a class="struct" href="struct.SlotArrayRef.html" title="struct page::slot_array::SlotArrayRef">Slot<wbr>Array<wbr>Ref</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Immutable zero-copy view into the slot array of a slotted page.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.get_slot_range.html" title="fn page::slot_array::get_slot_range">get_<wbr>slot_<wbr>range</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.get_slot_start.html" title="fn page::slot_array::get_slot_start">get_<wbr>slot_<wbr>start</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html>
