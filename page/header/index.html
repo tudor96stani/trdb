@@ -1,34 +1,80 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Module defining the layout and accessors for the page header in a slotted page."><title>page::header - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="page" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module header</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../page/index.html">page</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module header</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#page-header-layout" title="Page Header Layout">Page Header Layout</a><ul><li><a href="#notes" title="Notes">Notes</a></li><li><a href="#memory-diagram" title="Memory Diagram">Memory Diagram</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate page</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">page</a></div><h1>Module <span>header</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/page/header.rs.html#1-154">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Module defining the layout and accessors for the page header in a slotted page.</p>
-<h2 id="page-header-layout"><a class="doc-anchor" href="#page-header-layout">§</a>Page Header Layout</h2>
-<p>The page header occupies the first <strong>128 bytes</strong> of every slotted page and
-contains metadata required to manage the page, free space, and its
-relationship to neighboring pages. All fields are stored in <strong>little-endian</strong>
-binary format.</p>
-<p>The layout is as follows:</p>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Page Header Definition and Accessors"><title>page::header - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="page" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module header</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../page/index.html">page</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module header</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#page-header-definition-and-accessors" title="Page Header Definition and Accessors">Page Header Definition and Accessors</a></li><li><a href="#binary-layout" title="Binary Layout">Binary Layout</a><ul><li><a href="#notes-on-format-compatibility" title="Notes on Format Compatibility">Notes on Format Compatibility</a></li></ul></li><li><a href="#header-invariants" title="Header Invariants">Header Invariants</a><ul><li><a href="#free-space-and-allocation-pointers" title="Free Space and Allocation Pointers">Free Space and Allocation Pointers</a></li><li><a href="#slot-allocation-rules" title="Slot Allocation Rules">Slot Allocation Rules</a></li><li><a href="#free-space-accounting" title="Free Space Accounting">Free Space Accounting</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate page</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">page</a></div><h1>Module <span>header</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/page/header.rs.html#1-349">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h3 id="page-header-definition-and-accessors"><a class="doc-anchor" href="#page-header-definition-and-accessors">§</a>Page Header Definition and Accessors</h3>
+<p>This module defines the binary layout, invariants, and safe accessors for
+the <strong>page header</strong> of a slotted page. The header occupies the first
+<strong>96 bytes</strong> of every page and stores all metadata required to manage
+tuple storage, slot array allocation, and logical linkage between pages.</p>
+<p>All fields are stored in <strong>little-endian</strong> format and accessed via
+zero-copy typed wrappers (<code>HeaderRef</code> and <code>HeaderMut</code>).</p>
+<h2 id="binary-layout"><a class="doc-anchor" href="#binary-layout">§</a>Binary Layout</h2>
+<p>The header has the following structure:</p>
 <div><table><thead><tr><th>Field</th><th>Type</th><th>Offset</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>slot_count</code></td><td>u16</td><td><a href="constant.SLOT_COUNT.html" title="constant page::header::SLOT_COUNT"><code>SLOT_COUNT</code></a></td><td>Number of active slots in the page.</td></tr>
-<tr><td><code>free_start</code></td><td>u16</td><td><a href="constant.FREE_START.html" title="constant page::header::FREE_START"><code>FREE_START</code></a></td><td>Beginning of the free-space region (grows upward).</td></tr>
-<tr><td><code>free_end</code></td><td>u16</td><td><a href="constant.FREE_END.html" title="constant page::header::FREE_END"><code>FREE_END</code></a></td><td>End of the free-space region (grows downward).</td></tr>
-<tr><td><code>free_space</code></td><td>u16</td><td><a href="constant.FREE_SPACE.html" title="constant page::header::FREE_SPACE"><code>FREE_SPACE</code></a></td><td>Total number of free bytes available.</td></tr>
-<tr><td><code>can_compact</code></td><td>u16</td><td><a href="constant.CAN_COMPACT.html" title="constant page::header::CAN_COMPACT"><code>CAN_COMPACT</code></a></td><td>Whether the page requires compaction (0 or 1).</td></tr>
-<tr><td><code>page_number</code></td><td>u16</td><td><a href="constant.PAGE_NUMBER.html" title="constant page::header::PAGE_NUMBER"><code>PAGE_NUMBER</code></a></td><td>Logical page identifier within the file.</td></tr>
-<tr><td><code>page_type</code></td><td>u16</td><td><a href="constant.PAGE_TYPE.html" title="constant page::header::PAGE_TYPE"><code>PAGE_TYPE</code></a></td><td>Page classification (data, internal, etc.).</td></tr>
-<tr><td><code>left_page</code></td><td>u32</td><td><a href="constant.LEFT_PAGE.html" title="constant page::header::LEFT_PAGE"><code>LEFT_PAGE</code></a></td><td>Pointer to the left sibling page (if any).</td></tr>
-<tr><td><code>right_page</code></td><td>u32</td><td><a href="constant.RIGHT_PAGE.html" title="constant page::header::RIGHT_PAGE"><code>RIGHT_PAGE</code></a></td><td>Pointer to the right sibling page (if any).</td></tr>
-<tr><td><code>last_lsn</code></td><td>u64</td><td><a href="constant.LAST_LSN.html" title="constant page::header::LAST_LSN"><code>LAST_LSN</code></a></td><td>Last log sequence number applied to this page.</td></tr>
+<tr><td><code>slot_count</code></td><td>u16</td><td>[<code>SLOT_COUNT</code>]</td><td>Number of allocated slots (active or unused).</td></tr>
+<tr><td><code>free_start</code></td><td>u16</td><td>[<code>FREE_START</code>]</td><td>Offset of the first free byte in the tuple/data region (grows upward).</td></tr>
+<tr><td><code>free_end</code></td><td>u16</td><td>[<code>FREE_END</code>]</td><td>Offset of the last free byte <em>before</em> the slot array region (grows downward).</td></tr>
+<tr><td><code>free_space</code></td><td>u16</td><td>[<code>FREE_SPACE</code>]</td><td>Total free space in bytes, including gaps and fragmented space.</td></tr>
+<tr><td><code>can_compact</code></td><td>u16</td><td>[<code>CAN_COMPACT</code>]</td><td>Whether fragmentation requires compaction (0 or 1).</td></tr>
+<tr><td><code>page_number</code></td><td>u32</td><td>[<code>PAGE_NUMBER</code>]</td><td>Logical page identifier within its file.</td></tr>
+<tr><td><code>page_type</code></td><td>u16</td><td>[<code>PAGE_TYPE</code>]</td><td>Page classification (data page, internal index page, etc.).</td></tr>
+<tr><td><code>left_page</code></td><td>u32</td><td>[<code>LEFT_PAGE</code>]</td><td>Pointer to the left sibling page (if applicable).</td></tr>
+<tr><td><code>right_page</code></td><td>u32</td><td>[<code>RIGHT_PAGE</code>]</td><td>Pointer to the right sibling page.</td></tr>
+<tr><td><code>last_lsn</code></td><td>u64</td><td>[<code>LAST_LSN</code>]</td><td>Last log sequence number applied to this page.</td></tr>
 </tbody></table>
-</div><h3 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h3>
+</div><h3 id="notes-on-format-compatibility"><a class="doc-anchor" href="#notes-on-format-compatibility">§</a>Notes on Format Compatibility</h3>
 <ul>
-<li>The design mirrors the Java implementation for compatibility.</li>
-<li>The Java version included <code>parent_page</code> at offset 22, which this
-implementation <strong>intentionally omits</strong>.</li>
-<li>The <code>last_lsn</code> field currently starts at offset 26 to preserve binary
-compatibility with the previous layout.</li>
+<li>The layout mirrors the existing Java implementation for binary compatibility.</li>
+<li>The Java version included <code>parent_page</code> at offset 22; this Rust version
+<strong>intentionally omits</strong> it.</li>
+<li><code>last_lsn</code> begins at offset 26 to maintain compatibility with the previous format.</li>
 </ul>
-<h3 id="memory-diagram"><a class="doc-anchor" href="#memory-diagram">§</a>Memory Diagram</h3><div class="example-wrap"><pre class="language-text"><code>+----------------------+-------------------+----------------------+
-|      Header          |     Data Area     |      Slot Array      |
-|       (128B)         |   (variable)      |     (grows left)     |
-+----------------------+-------------------+----------------------+</code></pre></div>
-<p>Each constant below defines the byte offset where its corresponding field is
-stored within the header.</p>
-</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.HeaderMut.html" title="struct page::header::HeaderMut">Header<wbr>Mut</a></dt><dd>The <code>HeaderMut</code> struct provides a mutable view into the header of a page.</dd><dt><a class="struct" href="struct.HeaderRef.html" title="struct page::header::HeaderRef">Header<wbr>Ref</a></dt><dd>The ‘HeaderRef’ struct provides an immutable view into the header of a page.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.CAN_COMPACT.html" title="constant page::header::CAN_COMPACT">CAN_<wbr>COMPACT</a></dt><dd>Offset of can_compact — type u16</dd><dt><a class="constant" href="constant.FREE_END.html" title="constant page::header::FREE_END">FREE_<wbr>END</a></dt><dd>Offset of free_end — type u16</dd><dt><a class="constant" href="constant.FREE_SPACE.html" title="constant page::header::FREE_SPACE">FREE_<wbr>SPACE</a></dt><dd>Offset of free_space — type u16</dd><dt><a class="constant" href="constant.FREE_START.html" title="constant page::header::FREE_START">FREE_<wbr>START</a></dt><dd>Offset of free_start — type u16</dd><dt><a class="constant" href="constant.HEADER_SIZE.html" title="constant page::header::HEADER_SIZE">HEADER_<wbr>SIZE</a></dt><dd>Size of the header in bytes.</dd><dt><a class="constant" href="constant.LAST_LSN.html" title="constant page::header::LAST_LSN">LAST_<wbr>LSN</a></dt><dd>Offset of last_lsn — type u64</dd><dt><a class="constant" href="constant.LEFT_PAGE.html" title="constant page::header::LEFT_PAGE">LEFT_<wbr>PAGE</a></dt><dd>Offset of left_page — type u32</dd><dt><a class="constant" href="constant.PAGE_NUMBER.html" title="constant page::header::PAGE_NUMBER">PAGE_<wbr>NUMBER</a></dt><dd>Offset of page_number — type u16</dd><dt><a class="constant" href="constant.PAGE_TYPE.html" title="constant page::header::PAGE_TYPE">PAGE_<wbr>TYPE</a></dt><dd>Offset of page_type — type u16</dd><dt><a class="constant" href="constant.RIGHT_PAGE.html" title="constant page::header::RIGHT_PAGE">RIGHT_<wbr>PAGE</a></dt><dd>Offset of right_page — type u32</dd><dt><a class="constant" href="constant.SLOT_COUNT.html" title="constant page::header::SLOT_COUNT">SLOT_<wbr>COUNT</a></dt><dd>Offset of slot_count — type u16</dd></dl></section></div></main></body></html>
+<h2 id="header-invariants"><a class="doc-anchor" href="#header-invariants">§</a>Header Invariants</h2>
+<p>The header defines three regions inside the page body:</p>
+<div class="example-wrap"><pre class="language-text"><code>┌───────────────┬───────────────────────────┬───────────────────────────┐
+│   Header       │       Tuple/Data Region   │      Slot Array Region    │
+│   (96 bytes)   │   (grows upward ↑)        │   (grows downward ↓)      │
+└───────────────┴───────────────────────────┴───────────────────────────┘
+^ offset 0                         free_start          free_end         PAGE_SIZE</code></pre></div>
+<p>The following invariants always hold (assuming <code>PAGE_SIZE = N</code>):</p>
+<h4 id="free-space-and-allocation-pointers"><a class="doc-anchor" href="#free-space-and-allocation-pointers">§</a>Free Space and Allocation Pointers</h4>
+<ul>
+<li>
+<p><strong><code>free_start</code></strong>
+Points to the first free byte in the tuple/data region.
+This region grows <strong>upwards</strong>, i.e., toward higher offsets.</p>
+</li>
+<li>
+<p><strong><code>free_end</code></strong>
+Points to the <strong>last free byte</strong> immediately <em>before</em> the slot array region.
+This value decreases as new slot headers are allocated.</p>
+</li>
+<li>
+<p><strong>Slot array occupies</strong> the byte range:<br>
+<code>data[(free_end + 1) .. PAGE_SIZE)</code></p>
+</li>
+</ul>
+<h4 id="slot-allocation-rules"><a class="doc-anchor" href="#slot-allocation-rules">§</a>Slot Allocation Rules</h4>
+<ul>
+<li>
+<p>When the page contains <strong>no slots</strong>,
+<code>free_end = PAGE_SIZE - 1</code>, therefore the slot array is empty.</p>
+</li>
+<li>
+<p>Allocating new slot decrements <code>free_end</code> by <code>SLOT_SIZE</code>:</p>
+<div class="example-wrap"><pre class="language-text"><code>free_end = free_end - SLOT_SIZE</code></pre></div>
+<p>This causes the slot array to grow <strong>downward</strong> from the end of the page
+(right-to-left in memory), avoiding the need to shift existing slot entries.</p>
+</li>
+</ul>
+<h4 id="free-space-accounting"><a class="doc-anchor" href="#free-space-accounting">§</a>Free Space Accounting</h4>
+<ul>
+<li>
+<p><code>free_space</code> tracks the total free bytes on the page, not necessarily
+the largest contiguous block. It includes fragmented space.</p>
+</li>
+<li>
+<p><code>can_compact = 1</code> signals that the page contains fragmentation and may
+need compaction to restore a contiguous free region.</p>
+</li>
+</ul>
+<p>Together, these invariants define the core state machine for all page
+modifications, insertion planning, compaction logic, and slot array access.</p>
+</div></details></section></div></main></body></html>

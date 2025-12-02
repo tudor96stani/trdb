@@ -1,2 +1,2 @@
-createSrcSidebar('[["binary_helpers",["",[],["bin_error.rs","le.rs","lib.rs"]]],["buffer",["",[],["lib.rs"]]],["file",["",[],["lib.rs"]]],["page",["",[],["header.rs","lib.rs","page.rs","page_error.rs"]]],["storage_api",["",[],["lib.rs"]]],["trdb",["",[],["main.rs"]]]]');
-//{"start":19,"fragment_lengths":[60,30,28,66,35,29]}
+createSrcSidebar('[["binary_helpers",["",[],["bin_error.rs","le.rs","lib.rs"]]],["buffer",["",[],["lib.rs"]]],["file",["",[],["lib.rs"]]],["page",["",[["errors",[],["header_error.rs","insert_error.rs","mod.rs","page_error.rs","page_op_error.rs","read_row_error.rs","slot_error.rs"]]],["header.rs","insertion_plan.rs","lib.rs","page.rs","page_id.rs","page_type.rs","slot.rs","slot_array.rs"]]],["storage_api",["",[],["lib.rs"]]],["trdb",["",[],["main.rs"]]]]');
+//{"start":19,"fragment_lengths":[60,30,28,255,35,29]}

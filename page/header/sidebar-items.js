@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CAN_COMPACT","FREE_END","FREE_SPACE","FREE_START","HEADER_SIZE","LAST_LSN","LEFT_PAGE","PAGE_NUMBER","PAGE_TYPE","RIGHT_PAGE","SLOT_COUNT"],"struct":["HeaderMut","HeaderRef"]};
+window.SIDEBAR_ITEMS = {};

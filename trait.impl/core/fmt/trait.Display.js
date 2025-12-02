@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["binary_helpers",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.91.1/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"enum\" href=\"binary_helpers/bin_error/enum.BinaryError.html\" title=\"enum binary_helpers::bin_error::BinaryError\">BinaryError</a>"]]],["page",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.91.1/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"enum\" href=\"page/page_error/enum.PageError.html\" title=\"enum page::page_error::PageError\">PageError</a>"]]]]);
+    var implementors = Object.fromEntries([["binary_helpers",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.91.1/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"enum\" href=\"binary_helpers/bin_error/enum.BinaryError.html\" title=\"enum binary_helpers::bin_error::BinaryError\">BinaryError</a>"]]],["page",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.91.1/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"struct\" href=\"page/page_id/struct.PageId.html\" title=\"struct page::page_id::PageId\">PageId</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[313,280]}
+//{"start":57,"fragment_lengths":[313,271]}
