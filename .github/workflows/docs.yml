@@ -24,7 +24,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build documentation
-        run: cargo doc --no-deps --release --workspace --all-features
+        run: cargo doc --no-deps --release --workspace --all-features --document-private-items
 
       - name: Create root index.html redirect
         run: |
