@@ -7,10 +7,24 @@ use crate::page_id::PageId;
 #[error("error on page {page_id}: {source}")]
 pub struct PageError {
     /// The page ID on which the error occurred
-    pub page_id: PageId,
+    pub(crate) page_id: PageId,
     /// The source error
-    pub source: PageOpError,
+    pub(crate) source: PageOpError,
 }
+
+// impl PageError {
+//     // pub fn new(page_id: PageId, source: PageOpError) -> Self {
+//     //     Self { page_id, source }
+//     // }
+//     //
+//     // pub fn source(&self) -> &PageOpError {
+//     //     &self.source
+//     // }
+//
+//     pub fn page_id(&self) -> PageId {
+//         self.page_id
+//     }
+// }
 
 /// Public facing result type of page operations.
 pub type PageResult<T> = Result<T, PageError>;

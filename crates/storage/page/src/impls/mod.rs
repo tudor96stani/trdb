@@ -1,0 +1,139 @@
+//! Module defining a fixed-size slotted page structure with its associated methods.
+//!
+//! # Memory Layout Overview
+//!
+//! A typical slotted page has this physical structure (generalized):
+//!
+//! ```text
+//!   ┌───────────────────────────────────────────────────────────────┐
+//!   │ Page Header (contains slot_count, free space ptrs, etc.)      │
+//!   ├───────────────────────────────────────────────────────────────┤
+//!   │ Tuple Data Region (grows upward)                              │
+//!   │   records / row fragments                                     │
+//!   │   variable sized                                              │
+//!   │   aligned upwards                                             │
+//!   ├───────────────────────────────────────────────────────────────┤
+//!   │ Free Space                                                    │
+//!   ├───────────────────────────────────────────────────────────────┤
+//!   │ Slot Array Region (grows downward)                            │
+//!   │   fixed-size SLOT_SIZE entries                                │
+//!   │   indexed logically left-to-right,                            │
+//!   │   stored physically right-to-left                             │
+//!   └───────────────────────────────────────────────────────────────┘
+//!
+//!                     ↑ page_start                        page_end ↑
+//! ```
+//!
+//! # Why This Design?
+//!
+//! - Adding a new slot does **not** require moving existing slots.
+//! - Tuple movement and compaction only affect the data region.
+//! - Both read and write operations are zero-copy and O(1).
+//!
+//! This module encapsulates that logic cleanly, exposing a safe and API for manipulating the slotted page.
+//!
+//!
+//! Header access is provided via `header::HeaderRef` and `header::HeaderMut` types.
+//! Slot array access is provided via `slot::SlotArrayRef` and `slot::SlotArrayMut` types.
+use crate::errors::header_error::HeaderError;
+use crate::errors::insert_error::InsertError;
+use crate::errors::page_error::{PageError, PageResult, WithPageId};
+use crate::errors::page_op_error::PageOpError;
+use crate::errors::read_row_error::ReadRowError;
+use crate::errors::slot_error::SlotError;
+use crate::header::{HeaderMut, HeaderRef};
+use crate::insertion_plan::InsertionPlan;
+use crate::page_id::PageId;
+use crate::page_type::PageType;
+use crate::slot::{SLOT_SIZE, SlotMut};
+use crate::slot_array::{SlotArrayMut, SlotArrayRef};
+use crate::{HEADER_SIZE, PAGE_SIZE, header};
+
+mod accessors;
+mod ctors;
+mod header_accessors;
+mod insert;
+mod private;
+mod read_row;
+
+/// Wrapper around a fixed-size byte array representing a page.
+#[derive(Debug)]
+pub struct Page {
+    /// Unique identifier of the page. Comprised of file_name_hash::page_number_within_file
+    page_id: PageId,
+    /// Main binary array holding the `PAGE_SIZE` bytes of data for the page. Boxed and owned by this struct.
+    data: Box<[u8; PAGE_SIZE]>,
+}
+
+/// Public APIs for the Page struct.
+/// All public APIs use the `PageResult` type
+impl Page {
+    /// Retrieves a row from the page by its slot index.
+    ///
+    /// # Arguments
+    ///
+    /// * `slot_index` - The index of the slot to retrieve the row from. Indexing starts from 0.
+    ///
+    /// # Returns
+    ///
+    /// * `PageResult<&[u8]>` - A result containing a reference to the row data as a byte slice
+    ///   if successful, or an error wrapped in `PageResult` if the operation fails.
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PageError` - If there is an issue with the operation, such as an invalid slot index.
+    ///
+    /// The error is augmented with the `page_id` of the current page for better traceability.
+    pub fn row(&self, slot_index: u32) -> PageResult<&[u8]> {
+        self.read_row_internal(slot_index)
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)
+    }
+
+    /// Plans the insertion of a row into the page. Used only for heap pages.
+    ///
+    /// # Arguments
+    ///
+    /// * `row_len` - The length of the row to be inserted, in bytes.
+    ///
+    /// # Returns
+    ///
+    /// * `PageResult<InsertionPlan>` - A result containing the insertion plan if successful,
+    ///   or an error wrapped in `PageResult` if the operation fails.
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PageError` - If there is an issue with the operation, such as insufficient space
+    ///   or other constraints preventing the insertion.
+    ///
+    /// The error is augmented with the `page_id` of the current page for better traceability.
+    pub fn plan_insert(&self, row_len: usize) -> PageResult<InsertionPlan> {
+        self.plan_insert_internal(row_len)
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)
+    }
+
+    /// Inserts a row into a heap page using the provided insertion plan.
+    ///
+    /// # Arguments
+    ///
+    /// * `plan` - The `InsertionPlan` that specifies where and how the row should be inserted.
+    /// * `row` - A `Vec<u8>` containing the row data to be inserted.
+    ///
+    /// # Returns
+    ///
+    /// * `PageResult<()>` - A result indicating success (`Ok(())`) or failure (`Err(PageError)`).
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PageOpError` - If there is an issue during the insertion process. `PageOpError` will contain the source error.
+    /// * The error is augmented with the `page_id` of the current page for better traceability.
+    pub fn insert_heap(&mut self, plan: InsertionPlan, row: Vec<u8>) -> PageResult<()> {
+        self.insert_row_unsorted_internal(plan, row)
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)
+    }
+}
