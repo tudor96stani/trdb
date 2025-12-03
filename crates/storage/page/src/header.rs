@@ -108,10 +108,14 @@ impl<'a> HeaderRef<'a> {
     /// # Returns
     /// - `Some(HeaderRef)` if the length of the `bytes` slice is equal to `HEADER_SIZE`.
     /// - `None` if the length of the `bytes` slice does not match `HEADER_SIZE`.
-    pub fn new(bytes: &'a [u8]) -> Option<Self> {
-        (bytes.len() == HEADER_SIZE).then(|| HeaderRef {
-            // Convert the slice reference into a fixed size array reference.
-            // Should be safe to unwrap since we checked the size already
+    pub fn new(bytes: &'a [u8]) -> Result<Self, HeaderError> {
+        if bytes.len() != HEADER_SIZE {
+            return Err(HeaderError::HeaderSliceSizeMismatch {
+                actual: bytes.len(),
+            });
+        }
+
+        Ok(HeaderRef {
             bytes: bytes.try_into().unwrap(),
         })
     }
@@ -144,22 +148,30 @@ impl<'a> HeaderMut<'a> {
     /// # Returns
     /// - `Some(Self)`: A`HeaderMut` if the length of the provided byte slice matches `HEADER_SIZE`
     /// - `None`: If the length of the provided byte slice does not match `HEADER_SIZE`.
-    pub(crate) fn new(bytes: &'a mut [u8]) -> Option<Self> {
-        (bytes.len() == HEADER_SIZE).then(|| HeaderMut {
-            // Convert the slice reference into a fixed size array reference.
-            // Should be safe to unwrap since we checked the size already
+    pub(crate) fn new(bytes: &'a mut [u8]) -> Result<Self, HeaderError> {
+        if bytes.len() != HEADER_SIZE {
+            return Err(HeaderError::HeaderSliceSizeMismatch {
+                actual: bytes.len(),
+            });
+        }
+
+        Ok(HeaderMut {
             bytes: bytes.try_into().unwrap(),
         })
     }
 
     /// Initializes the header with default values for a new empty page.
-    pub(crate) fn default(&mut self, page_number: u32, page_type: PageType) {
-        self.set_page_number(page_number);
-        self.set_free_start(HEADER_SIZE as u16);
-        self.set_free_end((PAGE_SIZE - 1) as u16);
-        let r = (PAGE_SIZE - 1) as u16;
-        self.set_free_space((PAGE_SIZE - HEADER_SIZE) as u16);
-        self.set_page_type(u16::from(page_type));
+    pub(crate) fn default(
+        &mut self,
+        page_number: u32,
+        page_type: PageType,
+    ) -> Result<(), HeaderError> {
+        self.set_page_number(page_number)?;
+        self.set_free_start(HEADER_SIZE as u16)?;
+        self.set_free_end((PAGE_SIZE - 1) as u16)?;
+        self.set_free_space((PAGE_SIZE - HEADER_SIZE) as u16)?;
+        self.set_page_type(u16::from(page_type))?;
+        Ok(())
     }
 }
 
@@ -288,6 +300,19 @@ mod header_ref_tests {
 
         assert!(!header.needs_compaction(row_size).unwrap());
     }
+
+    #[test]
+    fn new_incorrect_slice_size_error_returned() {
+        let header_bytes = [0u8; HEADER_SIZE + 1];
+
+        let result = HeaderRef::new(&header_bytes);
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            HeaderError::HeaderSliceSizeMismatch { actual: 97 }
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -313,20 +338,29 @@ mod header_mut_tests {
         header_mut.set_right_page(0x15161718u32).unwrap();
         header_mut.set_last_lsn(0xDEADBEEFCAFEBABEu64).unwrap();
 
-        // 3) Verify values by creating an immutable HeaderRef over the same bytes
-        //    and asserting each getter returns the expected value.
-        let header_ref = HeaderRef::new(&header_bytes).unwrap();
+        assert_eq!(header_mut.get_slot_count().unwrap(), 0x0102u16);
+        assert_eq!(header_mut.get_free_start().unwrap(), 0x0304u16);
+        assert_eq!(header_mut.get_free_end().unwrap(), 0x0506u16);
+        assert_eq!(header_mut.get_free_space().unwrap(), 0x0708u16);
+        assert_eq!(header_mut.get_can_compact().unwrap(), 0x090Au16);
+        assert_eq!(header_mut.get_page_number().unwrap(), 0x0B0C0D0Eu32);
+        assert_eq!(header_mut.get_page_type().unwrap(), 0x0F10u16);
+        assert_eq!(header_mut.get_left_page().unwrap(), 0x11121314u32);
+        assert_eq!(header_mut.get_right_page().unwrap(), 0x15161718u32);
+        assert_eq!(header_mut.get_last_lsn().unwrap(), 0xDEADBEEFCAFEBABEu64);
+    }
 
-        assert_eq!(header_ref.get_slot_count().unwrap(), 0x0102u16);
-        assert_eq!(header_ref.get_free_start().unwrap(), 0x0304u16);
-        assert_eq!(header_ref.get_free_end().unwrap(), 0x0506u16);
-        assert_eq!(header_ref.get_free_space().unwrap(), 0x0708u16);
-        assert_eq!(header_ref.get_can_compact().unwrap(), 0x090Au16);
-        assert_eq!(header_ref.get_page_number().unwrap(), 0x0B0C0D0Eu32);
-        assert_eq!(header_ref.get_page_type().unwrap(), 0x0F10u16);
-        assert_eq!(header_ref.get_left_page().unwrap(), 0x11121314u32);
-        assert_eq!(header_ref.get_right_page().unwrap(), 0x15161718u32);
-        assert_eq!(header_ref.get_last_lsn().unwrap(), 0xDEADBEEFCAFEBABEu64);
+    #[test]
+    fn new_incorrect_slice_size_error_returned() {
+        let mut header_bytes = [0u8; HEADER_SIZE + 1];
+
+        let result = HeaderMut::new(&mut header_bytes);
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            HeaderError::HeaderSliceSizeMismatch { actual: 97 }
+        ))
     }
 
     #[test]

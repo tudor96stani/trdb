@@ -1,12 +1,13 @@
 use super::Page;
 use crate::PAGE_SIZE;
+use crate::errors::header_error::HeaderError;
 use crate::page_id::PageId;
 use crate::page_type::PageType;
 
 /// Methods for creating and initializing pages.
 impl Page {
     /// Creates a new page with all bytes initialized to zero. Private constructor.
-    fn new_zeroed(page_id: PageId) -> Self {
+    pub(crate) fn new_zeroed(page_id: PageId) -> Self {
         Self {
             page_id,
             data: Box::new([0; PAGE_SIZE]),
@@ -14,7 +15,7 @@ impl Page {
     }
 
     /// Creates a new page from an existing byte array.
-    pub fn new_from_bytes(bytes: Box<[u8; 4096]>, page_id: PageId) -> Self {
+    pub(crate) fn new_from_bytes(bytes: Box<[u8; 4096]>, page_id: PageId) -> Self {
         Self {
             data: bytes,
             page_id,
@@ -22,12 +23,12 @@ impl Page {
     }
 
     /// Creates a new empty page with the specified page ID and page type.
-    pub fn new_empty(page_id: PageId, page_type: PageType) -> Self {
+    pub(crate) fn new_empty(page_id: PageId, page_type: PageType) -> Result<Self, HeaderError> {
         let mut page = Self::new_zeroed(page_id);
 
-        page.header_mut().default(page_id.page_number, page_type);
+        page.header_mut()?.default(page_id.page_number, page_type);
 
-        page
+        Ok(page)
     }
 }
 
@@ -39,11 +40,11 @@ mod new_and_accessors_tests {
     #[test]
     fn test_new_empty_page() {
         let page_id = PageId::new(1, 0);
-        let page = Page::new_empty(page_id, PageType::Unsorted);
+        let page = Page::new_empty(page_id, PageType::Unsorted).unwrap();
 
         assert_eq!(page.page_id(), page_id);
 
-        let header = page.header_ref();
+        let header = page.header_ref().unwrap();
         assert_eq!(header.get_page_number().unwrap(), 0);
         assert_eq!(
             header.get_page_type().unwrap(),

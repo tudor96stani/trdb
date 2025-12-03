@@ -17,7 +17,7 @@ mod new_and_accessors_tests {
     #[test]
     fn test_get_page_id() {
         let page_id = PageId::new(2, 5);
-        let page = Page::new_empty(page_id, PageType::IndexLeaf);
+        let page = Page::new_empty(page_id, PageType::IndexLeaf).unwrap();
 
         assert_eq!(page.page_id(), page_id);
     }

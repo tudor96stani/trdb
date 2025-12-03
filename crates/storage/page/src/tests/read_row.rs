@@ -13,9 +13,9 @@ mod read_row_tests {
 
     #[test]
     fn read_row_out_of_bounds() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted);
-        page.header_mut().set_slot_count(2);
-        page.header_mut().set_free_end(4088);
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        page.header_mut().unwrap().set_slot_count(2);
+        page.header_mut().unwrap().set_free_end(4088);
 
         let result_internal = page.row(3);
         assert!(matches!(
@@ -64,8 +64,8 @@ mod read_row_tests {
         slot.set_length(10);
 
         let mut page = Page::new_from_bytes(page_bytes, PageId::new(1, 0));
-        page.header_mut().set_free_end(4091);
-        page.header_mut().set_slot_count(1);
+        page.header_mut().unwrap().set_free_end(4091);
+        page.header_mut().unwrap().set_slot_count(1);
 
         // Get the row via the slot number
         let row_internal = page.row(0).unwrap();

@@ -9,15 +9,15 @@ use crate::slot_array::{SlotArrayMut, SlotArrayRef};
 impl Page {
     /// Returns an immutable view of the slot array.
     #[inline]
-    pub(super) fn slot_array(&'_ self) -> Result<SlotArrayRef<'_>, SlotError> {
-        let free_end_offset = self.header_ref().get_free_end()? as usize;
-        let slot_count = self.header_ref().get_slot_count()?;
+    pub(crate) fn slot_array_ref(&'_ self) -> Result<SlotArrayRef<'_>, SlotError> {
+        let free_end_offset = self.header_ref()?.get_free_end()? as usize;
+        let slot_count = self.header_ref()?.get_slot_count()?;
         SlotArrayRef::new(&self.data[free_end_offset + 1..PAGE_SIZE], slot_count)
     }
 
-    pub(super) fn slot_array_mut(&'_ mut self) -> Result<SlotArrayMut<'_>, SlotError> {
-        let free_end_offset = self.header_ref().get_free_end()? as usize;
-        let slot_count = self.header_ref().get_slot_count()?;
+    pub(crate) fn slot_array_mut(&'_ mut self) -> Result<SlotArrayMut<'_>, SlotError> {
+        let free_end_offset = self.header_ref()?.get_free_end()? as usize;
+        let slot_count = self.header_ref()?.get_slot_count()?;
         SlotArrayMut::new(&mut self.data[free_end_offset + 1..PAGE_SIZE], slot_count)
     }
 
@@ -26,7 +26,7 @@ impl Page {
     /// Returns a boolean or error if something goes wrong while processing the header.
     #[inline]
     pub(super) fn row_size_fits(&self, row_size: usize) -> Result<bool, HeaderError> {
-        Ok(self.header_ref().get_free_space()? >= (row_size + SLOT_SIZE) as u16)
+        Ok(self.header_ref()?.get_free_space()? >= (row_size + SLOT_SIZE) as u16)
     }
 }
 
@@ -39,25 +39,25 @@ mod private_methods_tests {
     // region Row fits
     #[test]
     fn row_fits_enough_space() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted);
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
         assert!(page.row_size_fits(100).unwrap());
     }
 
     #[test]
     fn row_fits_at_limit() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted);
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
         assert!(page.row_size_fits(3996).unwrap());
     }
 
     #[test]
     fn row_fits_slot_would_not_fit() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted);
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
         assert!(!page.row_size_fits(3998).unwrap());
     }
 
     #[test]
     fn row_fits_would_not_fit_at_all() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted);
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
         assert!(!page.row_size_fits(4000).unwrap());
     }
     // endregion
@@ -65,11 +65,11 @@ mod private_methods_tests {
     // region Slot array
     #[test]
     fn slot_array_corrupted_header_returns_error() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted);
-        page.header_mut().set_free_end(4090);
-        page.header_mut().set_slot_count(10);
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        page.header_mut().unwrap().set_free_end(4090);
+        page.header_mut().unwrap().set_slot_count(10);
 
-        let result = page.slot_array();
+        let result = page.slot_array_ref();
         assert!(matches!(
             result,
             Err(SlotError::SlotRegionSizeMismatch {
