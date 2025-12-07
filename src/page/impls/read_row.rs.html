@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a>    <span class="doccomment">/// Retrieves a row by its slot index.
 <a href=#7 id=7 data-nosnippet>7</a>    /// Returns a slice of bytes representing the row data.
 <a href=#8 id=8 data-nosnippet>8</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>read_row_internal(<span class="kw-2">&amp;</span><span class="self">self</span>, slot_index: u32) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>[u8], ReadRowError&gt; {
-<a href=#9 id=9 data-nosnippet>9</a>        <span class="kw">let </span>slot = <span class="self">self</span>.slot_array()<span class="question-mark">?</span>.slot_ref(slot_index)<span class="question-mark">?</span>;
+<a href=#9 id=9 data-nosnippet>9</a>        <span class="kw">let </span>slot = <span class="self">self</span>.slot_array_ref()<span class="question-mark">?</span>.slot_ref(slot_index)<span class="question-mark">?</span>;
 <a href=#10 id=10 data-nosnippet>10</a>
 <a href=#11 id=11 data-nosnippet>11</a>        <span class="kw">let </span>(offset, length) = (slot.offset()<span class="question-mark">? </span><span class="kw">as </span>usize, slot.length()<span class="question-mark">? </span><span class="kw">as </span>usize);
 <a href=#12 id=12 data-nosnippet>12</a>
