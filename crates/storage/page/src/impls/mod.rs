@@ -35,24 +35,17 @@
 //!
 //! Header access is provided via `header::HeaderRef` and `header::HeaderMut` types.
 //! Slot array access is provided via `slot::SlotArrayRef` and `slot::SlotArrayMut` types.
-use crate::errors::header_error::HeaderError;
-use crate::errors::insert_error::InsertError;
-use crate::errors::page_error::{PageError, PageResult, WithPageId};
+use crate::PAGE_SIZE;
+use crate::errors::page_error::{PageResult, WithPageId};
 use crate::errors::page_op_error::PageOpError;
-use crate::errors::read_row_error::ReadRowError;
-use crate::errors::slot_error::SlotError;
-use crate::header::{HeaderMut, HeaderRef};
 use crate::insertion_plan::InsertionPlan;
 use crate::page_id::PageId;
-use crate::page_type::PageType;
-use crate::slot::{SLOT_SIZE, SlotMut};
-use crate::slot_array::{SlotArrayMut, SlotArrayRef};
-use crate::{HEADER_SIZE, PAGE_SIZE, header};
 
 mod accessors;
 mod ctors;
 mod header_accessors;
 mod insert;
+mod plan_insert;
 mod private;
 mod read_row;
 
@@ -135,5 +128,13 @@ impl Page {
         self.insert_row_unsorted_internal(plan, row)
             .map_err(PageOpError::from)
             .with_page_id(self.page_id)
+    }
+}
+
+/// Expose access to the underlying byte array for testing purposes.
+#[cfg(test)]
+impl Page {
+    pub(super) fn data_mut(&mut self) -> &mut [u8; PAGE_SIZE] {
+        &mut self.data
     }
 }

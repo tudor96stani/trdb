@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod read_row_tests {
+mod read_row_test {
     use super::*;
     use crate::PAGE_SIZE;
     use crate::errors::page_error::PageError;

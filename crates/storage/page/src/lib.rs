@@ -13,7 +13,7 @@ pub mod impls;
 pub mod page_id;
 
 mod errors;
-mod insertion_plan;
+pub mod insertion_plan;
 /// Different types of pages supported.
 pub mod page_type;
 mod slot;
