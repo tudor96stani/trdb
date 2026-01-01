@@ -1,3 +1,4 @@
+use crate::errors::delete_error::DeleteError;
 use crate::errors::header_error::HeaderError;
 use crate::errors::insert_error::InsertError;
 use crate::errors::read_row_error::ReadRowError;
@@ -15,4 +16,6 @@ pub(crate) enum PageOpError {
     ReadRow(#[from] ReadRowError),
     #[error("Error while inserting row")]
     Insert(#[from] InsertError),
+    #[error("Error while deleting row")]
+    DeleteRow(#[from] DeleteError),
 }

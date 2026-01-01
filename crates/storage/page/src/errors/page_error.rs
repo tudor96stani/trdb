@@ -12,20 +12,6 @@ pub struct PageError {
     pub(crate) source: PageOpError,
 }
 
-// impl PageError {
-//     // pub fn new(page_id: PageId, source: PageOpError) -> Self {
-//     //     Self { page_id, source }
-//     // }
-//     //
-//     // pub fn source(&self) -> &PageOpError {
-//     //     &self.source
-//     // }
-//
-//     pub fn page_id(&self) -> PageId {
-//         self.page_id
-//     }
-// }
-
 /// Public facing result type of page operations.
 pub type PageResult<T> = Result<T, PageError>;
 

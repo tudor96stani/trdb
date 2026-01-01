@@ -11,8 +11,6 @@ pub(crate) enum InsertError {
         /// Actual number of free bytes in the page
         page_free_space: usize,
     },
-    #[error("Unable to find enough free bytes in page for row of {required_space} bytes")]
-    CannotFindSpace { required_space: usize },
     #[error("Error while accessing slot array")]
     SlotError(#[from] SlotError),
     #[error("Error while accessing header")]

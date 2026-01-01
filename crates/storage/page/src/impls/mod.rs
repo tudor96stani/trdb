@@ -43,6 +43,7 @@ use crate::page_id::PageId;
 
 mod accessors;
 mod ctors;
+mod delete;
 mod header_accessors;
 mod insert;
 mod plan_insert;
@@ -126,6 +127,33 @@ impl Page {
     /// * The error is augmented with the `page_id` of the current page for better traceability.
     pub fn insert_heap(&mut self, plan: InsertionPlan, row: Vec<u8>) -> PageResult<()> {
         self.insert_row_unsorted_internal(plan, row)
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)
+    }
+
+    /// Deletes a row from the page at the specified slot index.
+    ///
+    /// # Arguments
+    ///
+    /// * `slot_index` - The index of the slot from which the row should be deleted.
+    ///   Indexing starts from 0.
+    /// * `compact_requested` - A boolean flag indicating whether compaction should
+    ///   be performed after the deletion. If `true`, the page may attempt to compact
+    ///   the remaining rows to reclaim space.
+    ///
+    /// # Returns
+    ///
+    /// * `PageResult<()>` - A result indicating success (`Ok(())`) or failure
+    ///   (`Err(PageOpError)`). The error is augmented with the `page_id` of the
+    ///   current page for better traceability.
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PageOpError` - If there is an issue during the deletion process, such as
+    ///   an invalid slot index or other constraints preventing the deletion.
+    pub fn delete_row(&mut self, slot_index: usize, compact_requested: bool) -> PageResult<()> {
+        self.delete_row_internal(slot_index, compact_requested)
             .map_err(PageOpError::from)
             .with_page_id(self.page_id)
     }
