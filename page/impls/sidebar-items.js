@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["accessors","ctors","header_accessors","insert","private","read_row"],"struct":["Page"]};
+window.SIDEBAR_ITEMS = {"mod":["accessors","ctors","header_accessors","insert","plan_insert","private","read_row"],"struct":["Page"]};

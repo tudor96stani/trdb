@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["InsertionPlan"]};
+window.SIDEBAR_ITEMS = {"enum":["InsertionOffset","InsertionSlot"],"struct":["InsertionPlan"]};
