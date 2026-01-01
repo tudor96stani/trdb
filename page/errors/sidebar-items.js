@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["header_error","insert_error","page_error","page_op_error","read_row_error","slot_error"]};
+window.SIDEBAR_ITEMS = {"mod":["delete_error","header_error","insert_error","page_error","page_op_error","read_row_error","slot_error"]};
