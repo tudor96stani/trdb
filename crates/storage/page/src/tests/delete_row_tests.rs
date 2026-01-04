@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::errors::delete_error::DeleteError;
@@ -76,5 +76,108 @@ mod tests {
             panic!("expected InvalidSlot, got {slot_error:?}")
         };
         assert_eq!(*slot_index, 2);
+    }
+
+    #[test]
+    fn delete_last_row_shifts_free_start() {
+        let mut page = Page::test_create_empty_heap();
+        page.test_insert_rows(vec![
+            SlotValues {
+                offset: 96,
+                len: 100,
+            },
+            SlotValues {
+                offset: 196,
+                len: 50,
+            },
+        ]);
+
+        page.delete_row(1, false).unwrap();
+
+        page.assert_header(&[&|h| assert_eq!(h.get_free_start().unwrap(), 196)])
+    }
+
+    #[test]
+    fn delete_last_row_shifts_free_end_when_rows_out_of_order() {
+        let mut page = Page::test_create_empty_heap();
+        page.test_insert_rows(vec![
+            SlotValues {
+                offset: 96,
+                len: 100,
+            },
+            SlotValues {
+                offset: 296,
+                len: 100,
+            },
+            SlotValues {
+                offset: 196,
+                len: 100,
+            },
+        ]);
+
+        page.delete_row(1, false).unwrap();
+
+        page.assert_header(&[&|h| assert_eq!(h.get_free_start().unwrap(), 296)])
+    }
+
+    #[test]
+    fn delete_last_row_shifts_free_end_when_empty_slots_in_the_middle_of_the_array() {
+        let mut page = Page::test_create_empty_heap();
+        page.test_insert_rows(vec![
+            SlotValues {
+                offset: 96,
+                len: 100,
+            },
+            SlotValues { offset: 0, len: 0 },
+            SlotValues {
+                offset: 196,
+                len: 100,
+            },
+        ]);
+
+        page.delete_row(2, false).unwrap();
+
+        page.assert_header(&[&|h| assert_eq!(h.get_free_start().unwrap(), 196)])
+    }
+
+    #[test]
+    fn delete_single_row_on_page() {
+        let mut page = Page::test_create_empty_heap();
+        page.test_insert_rows(vec![SlotValues {
+            offset: 96,
+            len: 100,
+        }]);
+
+        page.delete_row(0, false).unwrap();
+
+        page.assert_header(&[&|h| assert_eq!(h.get_free_start().unwrap(), 96)])
+    }
+
+    #[test]
+    fn delete_when_only_invalid_slots_returns_error() {
+        let mut page = Page::test_create_empty_heap();
+        page.test_insert_rows(vec![
+            SlotValues {
+                offset: 96,
+                len: 100,
+            },
+            SlotValues {
+                offset: 196,
+                len: 100,
+            },
+        ]);
+        page.delete_row(0, false).unwrap();
+        page.delete_row(1, false).unwrap();
+
+        let err = page.delete_row(0, false).unwrap_err();
+
+        let slot_error = err.source.expect_delete_error().expect_slot_error();
+
+        let SlotError::InvalidSlot { slot_index } = slot_error else {
+            panic!("expected InvalidSlot, got {slot_error:?}")
+        };
+        assert_eq!(*slot_index, 0);
+
+        page.assert_header(&[&|h| assert_eq!(h.get_free_start().unwrap(), 96)])
     }
 }
