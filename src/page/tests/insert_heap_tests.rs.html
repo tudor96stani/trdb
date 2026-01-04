@@ -253,21 +253,9 @@
 <a href=#253 id=253 data-nosnippet>253</a>        ])
 <a href=#254 id=254 data-nosnippet>254</a>    }
 <a href=#255 id=255 data-nosnippet>255</a>
-<a href=#256 id=256 data-nosnippet>256</a>    <span class="comment">// Invalid scenarios:
+<a href=#256 id=256 data-nosnippet>256</a>    <span class="comment">// Invalid scenarios as of right now:
 <a href=#257 id=257 data-nosnippet>257</a>    // - insert new row in between 2 rows (perfect fit), create new slot
 <a href=#258 id=258 data-nosnippet>258</a>    // - insert new row at free start only after compaction, create new slot
-<a href=#259 id=259 data-nosnippet>259</a>    // this is because in order to have a fragment, it means that a row was deleted. if the row was deleted, we still have an available/unused slot in the array
-<a href=#260 id=260 data-nosnippet>260</a>    // Technically these scenarios are possible, but will not cover them since it would mean to manually corrupt the page (insert delete the 2nd row from the page, but invalidate the last slot:
-<a href=#261 id=261 data-nosnippet>261</a>    // row1: 96-100,
-<a href=#262 id=262 data-nosnippet>262</a>    // row2: deleted,
-<a href=#263 id=263 data-nosnippet>263</a>    // row3: 196-296,
-<a href=#264 id=264 data-nosnippet>264</a>    // but have slot array defined as
-<a href=#265 id=265 data-nosnippet>265</a>    // (96,100), (196,100), (0,0) -&gt; how did row2 become assigned
-<a href=#266 id=266 data-nosnippet>266</a>
-<a href=#267 id=267 data-nosnippet>267</a>    /*
-<a href=#268 id=268 data-nosnippet>268</a>    insert row1 offset 96 len 100 =&gt; new slot =&gt; free_start = 196
-<a href=#269 id=269 data-nosnippet>269</a>    insert row2 offset 196 len 100 =&gt; new slot =&gt; free_start = 296
-<a href=#270 id=270 data-nosnippet>270</a>    delete row2 =&gt; if delete determines that we are removing the last row in the page (physically) it can shift back the free_start pointer to the previous physical row. so free_start is now 196 again
-<a href=#271 id=271 data-nosnippet>271</a>    insert row3 offset 196 len 100 =&gt; reuse existing slot1 =&gt; free_start = 296
-<a href=#272 id=272 data-nosnippet>272</a>     */
-<a href=#273 id=273 data-nosnippet>273</a></span>}</code></pre></div></section></main></body></html>
+<a href=#259 id=259 data-nosnippet>259</a>    // these are invalid because the only way to achieve fragmentation is through row deletion, but row deletion implies unused slots, thus it makes it impossible to have scenarios where we have both fragmentation + no unused slots.
+<a href=#260 id=260 data-nosnippet>260</a>    // TODO revisit these once row updates are implemented.
+<a href=#261 id=261 data-nosnippet>261</a></span>}</code></pre></div></section></main></body></html>
