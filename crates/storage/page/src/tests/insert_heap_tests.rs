@@ -253,21 +253,9 @@ mod tests {
         ])
     }
 
-    // Invalid scenarios:
+    // Invalid scenarios as of right now:
     // - insert new row in between 2 rows (perfect fit), create new slot
     // - insert new row at free start only after compaction, create new slot
-    // this is because in order to have a fragment, it means that a row was deleted. if the row was deleted, we still have an available/unused slot in the array
-    // Technically these scenarios are possible, but will not cover them since it would mean to manually corrupt the page (insert delete the 2nd row from the page, but invalidate the last slot:
-    // row1: 96-100,
-    // row2: deleted,
-    // row3: 196-296,
-    // but have slot array defined as
-    // (96,100), (196,100), (0,0) -> how did row2 become assigned
-
-    /*
-    insert row1 offset 96 len 100 => new slot => free_start = 196
-    insert row2 offset 196 len 100 => new slot => free_start = 296
-    delete row2 => if delete determines that we are removing the last row in the page (physically) it can shift back the free_start pointer to the previous physical row. so free_start is now 196 again
-    insert row3 offset 196 len 100 => reuse existing slot1 => free_start = 296
-     */
+    // these are invalid because the only way to achieve fragmentation is through row deletion, but row deletion implies unused slots, thus it makes it impossible to have scenarios where we have both fragmentation + no unused slots.
+    // TODO revisit these once row updates are implemented.
 }
