@@ -1,8 +1,9 @@
-use crate::PAGE_SIZE;
+use crate::header::HeaderRef;
 use crate::impls::Page;
 use crate::page_id::PageId;
 use crate::page_type::PageType;
 use crate::slot::SLOT_SIZE;
+use crate::{HEADER_SIZE, PAGE_SIZE};
 
 mod delete_row_tests;
 mod insert_heap_tests;
@@ -72,15 +73,43 @@ impl Page {
                 .unwrap()
                 .set_length(slot.len as u16)
                 .unwrap();
-            let value = (index + 1) as u8;
-            let len = slot.len;
-            self.data_mut()[slot.offset..slot.offset + slot.len]
-                .copy_from_slice(vec![value; len].as_slice())
+            // Only insert row data if slot is valid, otherwise just move on
+            if slot.offset != 0 && slot.len != 0 {
+                let value = (index + 1) as u8;
+                let len = slot.len;
+                self.data_mut()[slot.offset..slot.offset + slot.len]
+                    .copy_from_slice(vec![value; len].as_slice());
+            }
         }
+        // free end is always right before the slot array, so we know how many slots we have => easily computed
+        self.header_mut()
+            .unwrap()
+            .set_free_end((PAGE_SIZE - 1 - slots.len() * 4) as u16)
+            .unwrap();
+
+        // free start is trickier. we need to figure out the last row that appears in the page => free start will be its offset + length
+        let max = slots
+            .iter()
+            .max_by_key(|s| s.offset)
+            .expect("slot array cannot be empty in this method");
+
+        let new_free_start = max.offset + max.len;
+        self.header_mut()
+            .unwrap()
+            .set_free_start(new_free_start as u16)
+            .unwrap();
+
+        // free space is 4000 - sum(length of each row) - SLOT_SIZE * slots.len
+        let total_row_size: usize = slots.iter().map(|s| s.len).sum();
+        let final_free_space = PAGE_SIZE - HEADER_SIZE - total_row_size - SLOT_SIZE * slots.len();
+        self.header_mut()
+            .unwrap()
+            .set_free_space(final_free_space as u16)
+            .unwrap();
     }
 
     /// Asserts that at the provided `offset`, the `value` byte is repeated for `length` - basically that the row data is what is expected, circumventing going through the slot array.
-    pub(super) fn assert_row(&mut self, offset: usize, length: usize, value: u8) {
+    pub(super) fn assert_row_values(&mut self, offset: usize, length: usize, value: u8) {
         let mut actual_row_data = &mut self.data_mut()[offset..offset + length];
 
         assert_eq!(vec![value; length].as_slice(), actual_row_data);
@@ -94,6 +123,22 @@ impl Page {
             .unwrap();
         assert_eq!(slot.offset().unwrap(), offset as u16);
         assert_eq!(slot.length().unwrap(), length as u16);
+    }
+
+    /// Pass a series of assertions to run against the header of the page.
+    /// #### Usage
+    /// ```rust
+    /// page.assert_header(
+    ///     &[
+    ///         &|h| assert_eq!(h.get_free_space().unwrap(), 100)
+    ///      ]
+    /// )
+    /// ```
+    pub(super) fn assert_header(&mut self, assertions: &[&dyn Fn(&HeaderRef)]) {
+        let header = self.header_ref().unwrap();
+        for assert_fn in assertions {
+            assert_fn(&header)
+        }
     }
 }
 

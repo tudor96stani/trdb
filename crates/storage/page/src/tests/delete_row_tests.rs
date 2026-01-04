@@ -26,8 +26,8 @@ mod tests {
 
         page.delete_row(0, false).unwrap();
 
-        page.assert_row(96, 100, 1);
-        page.assert_row(196, 100, 2);
+        page.assert_row_values(96, 100, 1);
+        page.assert_row_values(196, 100, 2);
         page.assert_slot(0, 0, 0);
         page.assert_slot(1, 196, 100);
     }
@@ -49,7 +49,7 @@ mod tests {
 
         page.delete_row(0, true).unwrap();
 
-        page.assert_row(96, 50, 2);
+        page.assert_row_values(96, 50, 2);
         page.assert_slot(0, 0, 0);
         page.assert_slot(1, 96, 50);
     }
