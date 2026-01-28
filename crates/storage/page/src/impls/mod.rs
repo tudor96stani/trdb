@@ -49,6 +49,7 @@ mod insert;
 mod plan_insert;
 mod private;
 mod read_row;
+mod update;
 
 /// Wrapper around a fixed-size byte array representing a page.
 #[derive(Debug)]
@@ -154,6 +155,33 @@ impl Page {
     ///   an invalid slot index or other constraints preventing the deletion.
     pub fn delete_row(&mut self, slot_index: usize, compact_requested: bool) -> PageResult<()> {
         self.delete_row_internal(slot_index, compact_requested)
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)
+    }
+
+    /// Updates the contents of a row.
+    /// New content can be of same size, smaller or larger.
+    /// For larger content, the new row size must still fit within the current page. It there is not enough room, an error will be returned to indicate this.
+    /// For such scenarios, a deletion & reinsertion is necessary.
+    ///
+    /// # Arguments
+    ///
+    /// * `slot_index`: the slot number of the row being updated
+    /// * `row`: the new content of the row.
+    ///
+    /// # Returns
+    ///
+    /// * `PageResult<()>` - A result indicating success (`Ok(())`) or failure
+    ///   (`Err(PageOpError)`). The error is augmented with the `page_id` of the
+    ///   current page for better traceability.
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PageOpError` - If there is an issue during the update process, such as
+    ///   an invalid slot index or other constraints preventing the update.
+    pub fn update_row(&mut self, slot_index: usize, row: Vec<u8>) -> PageResult<()> {
+        self.update_internal(slot_index, row)
             .map_err(PageOpError::from)
             .with_page_id(self.page_id)
     }

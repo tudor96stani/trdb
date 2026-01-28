@@ -9,6 +9,7 @@ mod delete_row_tests;
 mod insert_heap_tests;
 mod plan_insert_tests;
 mod read_row_tests;
+mod update_row_tests;
 
 /// This section defines helper methods for the test suite. They are defined as methods on the `Page` struct, but are only available in the test environment.
 #[cfg(test)]
@@ -158,7 +159,9 @@ mod tests_error_helpers {
     use crate::errors::page_op_error::PageOpError;
     use crate::errors::read_row_error::ReadRowError;
     use crate::errors::slot_error::SlotError;
+    use crate::errors::update_error::UpdateError;
     use binary_helpers::bin_error::BinaryError;
+    use binary_helpers::conversions::ConversionError;
 
     // Macro to generate expect_* helpers
     macro_rules! impl_expect_ref {
@@ -184,6 +187,7 @@ mod tests_error_helpers {
     impl_expect_ref!(PageOpError, expect_read_row_error, ReadRow => ReadRowError);
     impl_expect_ref!(PageOpError, expect_insert_error, Insert => InsertError);
     impl_expect_ref!(PageOpError, expect_delete_error, DeleteRow => DeleteError);
+    impl_expect_ref!(PageOpError, expect_update_error, UpdateRow => UpdateError);
 
     impl_expect_ref!(HeaderError, expect_binary_error, BinaryError => BinaryError);
 
@@ -197,4 +201,9 @@ mod tests_error_helpers {
 
     impl_expect_ref!(DeleteError, expect_slot_error, SlotError => SlotError);
     impl_expect_ref!(DeleteError, expect_header_error, HeaderError => HeaderError);
+
+    impl_expect_ref!(UpdateError, expect_slot_error, SlotError => SlotError);
+    impl_expect_ref!(UpdateError, expect_header_error, HeaderError => HeaderError);
+    impl_expect_ref!(UpdateError, expect_insert_error, InsertError => InsertError);
+    impl_expect_ref!(UpdateError, expect_conversion_error, ConversionError => ConversionError);
 }

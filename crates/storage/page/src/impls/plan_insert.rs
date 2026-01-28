@@ -5,6 +5,16 @@ use crate::insertion_plan::{InsertionOffset, InsertionPlan, InsertionSlot};
 use crate::slot::{SLOT_SIZE, SlotRef};
 
 impl Page {
+    /// Plans the insertion of a row into the page.
+    ///
+    /// This function determines the appropriate slot (either reusing an existing slot
+    /// or creating a new one) and calculates the offset for the new row. It also checks
+    /// if there is enough free space in the page to accommodate the new row and, if needed,
+    /// the space for a new slot entry.
+    ///
+    /// # Arguments
+    ///
+    /// * `row_len` - The length of the row to be inserted, in bytes.
     pub(super) fn plan_insert_internal(
         &self,
         row_len: usize,
@@ -28,11 +38,15 @@ impl Page {
         }
 
         // Offset planning
-        let offset = self.find_insertion_offset(row_len)?;
+        let offset = self.find_insertion_offset(row_len, None)?;
 
         Ok(InsertionPlan { slot, offset })
     }
 
+    /// Determines the slot to use for the insertion.
+    ///
+    /// This function checks the slot array for an invalid slot that can be reused.
+    /// If no such slot is found, it indicates that a new slot needs to be allocated.
     fn get_insertion_slot(&self) -> Result<InsertionSlot, InsertError> {
         let header = self.header_ref()?;
         let slot_array = self.slot_array_ref()?;
@@ -48,7 +62,27 @@ impl Page {
         Ok(InsertionSlot::New)
     }
 
-    fn find_insertion_offset(&self, row_len: usize) -> Result<InsertionOffset, InsertError> {
+    /// Computes the offset at which the new row can be inserted in the page.
+    ///
+    /// Checks the following conditions, in this order:
+    /// 1) between `free_start` and `free_end`
+    /// 2) between any two existing rows
+    /// 3) between last row and `free_start`
+    /// 4) after a compaction
+    ///
+    /// The probes are short circuiting - the first one to match triggers a return.
+    ///
+    /// # Arguments
+    ///
+    /// * `row_len`: The length of the new row, in bytes.
+    /// * `treat_slot_len_as_zero` - An optional metadata value used for row update flows.
+    ///   If provided, the length of the row at the given index is ignored, allowing the
+    ///   algorithm to consider the space occupied by the old row as available.
+    pub(super) fn find_insertion_offset(
+        &self,
+        row_len: usize,
+        treat_slot_len_as_zero: Option<usize>,
+    ) -> Result<InsertionOffset, InsertError> {
         let header = self.header_ref()?;
         let slot_array = self.slot_array_ref()?;
 
@@ -69,7 +103,15 @@ impl Page {
             let s = slot_array.slot_ref(i as u32)?;
             if self.is_slot_valid(&s)? {
                 let start = s.offset()? as usize;
-                let end = start + s.length()? as usize;
+
+                // for updates, we might be instructed to ignore the row that is being changed - the space occupied by it is not relevant, so it can be treated as non-existent.
+                // this allows us to isolate scenarios where the current_row.len = 100, there is a 50 bytes gap right after it and we want to update it to a new len of 150 => it should fit in the spot used by the old row + the existing gap.
+                let end = if Some(i) == treat_slot_len_as_zero {
+                    start
+                } else {
+                    start + s.length()? as usize
+                };
+
                 extents.push((start, end));
             }
         }
@@ -215,7 +257,7 @@ mod tests {
             .set_free_end((PAGE_SIZE - 1) as u16)
             .unwrap();
 
-        let res = page.find_insertion_offset(50).unwrap();
+        let res = page.find_insertion_offset(50, None).unwrap();
         assert!(matches!(res, InsertionOffset::Exact(100)));
     }
 
@@ -239,7 +281,7 @@ mod tests {
             .set_free_start(new_free_end - 10)
             .unwrap();
 
-        let res = page.find_insertion_offset(50).unwrap();
+        let res = page.find_insertion_offset(50, None).unwrap();
         assert!(matches!(res, InsertionOffset::AfterCompactionFreeStart));
     }
 
@@ -270,7 +312,7 @@ mod tests {
         }
 
         let expected = HEADER_SIZE + 10;
-        let res = page.find_insertion_offset(15).unwrap();
+        let res = page.find_insertion_offset(15, None).unwrap();
         assert!(matches!(res, InsertionOffset::Exact(pos) if pos == expected));
     }
 
@@ -300,7 +342,7 @@ mod tests {
         }
 
         let last_end = (HEADER_SIZE + 8);
-        let res = page.find_insertion_offset(10).unwrap();
+        let res = page.find_insertion_offset(10, None).unwrap();
         assert!(matches!(res, InsertionOffset::Exact(pos) if pos == last_end));
     }
 
@@ -332,7 +374,37 @@ mod tests {
             sa.set_slot(1, (new_free_end - 20), 20).unwrap();
         }
 
-        let res = page.find_insertion_offset(10).unwrap();
+        let res = page.find_insertion_offset(10, None).unwrap();
         assert!(matches!(res, InsertionOffset::AfterCompactionFreeStart));
+    }
+
+    #[test]
+    fn find_insertion_offset_skip_slot_for_updates_gap_correctly_identified() {
+        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let slot_count: u16 = 3;
+        page.header_mut()
+            .unwrap()
+            .set_slot_count(slot_count)
+            .unwrap();
+        let new_free_end = (PAGE_SIZE - 1 - (slot_count as usize * SLOT_SIZE)) as u16;
+        // Set free_start such that the tail gap is smaller than the requested row_len
+        page.header_mut()
+            .unwrap()
+            .set_free_end(new_free_end) // 4083
+            .unwrap();
+        page.header_mut()
+            .unwrap()
+            .set_free_start(new_free_end - 5) // 4077
+            .unwrap();
+
+        // Place a row from 96 -> 200, then another one from 250 -> 4077
+        {
+            let mut sa = page.slot_array_mut().unwrap();
+            sa.set_slot(0, 96, 104).unwrap();
+            sa.set_slot(2, 250, 3827).unwrap();
+        }
+
+        let res = page.find_insertion_offset(150, Some(0)).unwrap();
+        assert!(matches!(res, InsertionOffset::Exact(96)));
     }
 }

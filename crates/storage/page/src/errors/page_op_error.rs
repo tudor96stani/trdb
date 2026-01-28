@@ -3,6 +3,7 @@ use crate::errors::header_error::HeaderError;
 use crate::errors::insert_error::InsertError;
 use crate::errors::read_row_error::ReadRowError;
 use crate::errors::slot_error::SlotError;
+use crate::errors::update_error::UpdateError;
 use thiserror::Error;
 
 /// Aggregator error type for all possible page related sub-errors
@@ -18,4 +19,6 @@ pub(crate) enum PageOpError {
     Insert(#[from] InsertError),
     #[error("Error while deleting row")]
     DeleteRow(#[from] DeleteError),
+    #[error("Error while updating row")]
+    UpdateRow(#[from] UpdateError),
 }

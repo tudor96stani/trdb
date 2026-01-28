@@ -112,6 +112,7 @@ impl<'a> HeaderRef<'a> {
         if bytes.len() != HEADER_SIZE {
             return Err(HeaderError::HeaderSliceSizeMismatch {
                 actual: bytes.len(),
+                expected: HEADER_SIZE,
             });
         }
 
@@ -152,6 +153,7 @@ impl<'a> HeaderMut<'a> {
         if bytes.len() != HEADER_SIZE {
             return Err(HeaderError::HeaderSliceSizeMismatch {
                 actual: bytes.len(),
+                expected: HEADER_SIZE,
             });
         }
 
@@ -218,6 +220,11 @@ macro_rules! impl_header_accessors {
                     pub(crate) fn [<set_ $field_name>](&mut self, val: $field_type)
                         -> Result<(), HeaderError>
                     {
+                         // Validate that the offset + field size doesn't exceed HEADER_SIZE
+                        if $field_offset + std::mem::size_of::<$field_type>() > HEADER_SIZE {
+                            return Err(HeaderError::OffsetArithmetic);
+                        }
+
                         write_le::<$field_type>(self.bytes, $field_offset, val)?;
                         Ok(())
                     }
@@ -310,7 +317,10 @@ mod header_ref_tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            HeaderError::HeaderSliceSizeMismatch { actual: 97 }
+            HeaderError::HeaderSliceSizeMismatch {
+                actual: 97,
+                expected: 96
+            }
         ))
     }
 }
@@ -359,7 +369,10 @@ mod header_mut_tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            HeaderError::HeaderSliceSizeMismatch { actual: 97 }
+            HeaderError::HeaderSliceSizeMismatch {
+                actual: 97,
+                expected: 96
+            }
         ))
     }
 
