@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["delete_row_tests","insert_heap_tests","plan_insert_tests","read_row_tests"]};
+window.SIDEBAR_ITEMS = {"mod":["delete_row_tests","insert_heap_tests","plan_insert_tests","read_row_tests","update_row_tests"]};
