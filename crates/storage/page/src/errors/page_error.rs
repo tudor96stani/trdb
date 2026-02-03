@@ -1,7 +1,7 @@
 use crate::errors::page_op_error::PageOpError;
 use crate::page_id::PageId;
 
-/// Public facing error type returned by the Page module.
+/// Public facing error type returned by the Page crate.
 ///
 #[derive(Debug, thiserror::Error)]
 #[error("error on page {page_id}: {source}")]
