@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["PageReadGuard"]};
+window.SIDEBAR_ITEMS = {"struct":["PageReadGuard","PageWriteGuard"]};
