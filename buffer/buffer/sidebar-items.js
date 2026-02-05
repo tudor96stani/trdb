@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PageState"],"struct":["BufferManager","PageEntry"]};

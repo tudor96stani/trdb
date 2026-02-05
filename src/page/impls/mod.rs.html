@@ -185,13 +185,15 @@
 <a href=#185 id=185 data-nosnippet>185</a>            .map_err(PageOpError::from)
 <a href=#186 id=186 data-nosnippet>186</a>            .with_page_id(<span class="self">self</span>.page_id)
 <a href=#187 id=187 data-nosnippet>187</a>    }
-<a href=#188 id=188 data-nosnippet>188</a>}
-<a href=#189 id=189 data-nosnippet>189</a>
-<a href=#190 id=190 data-nosnippet>190</a><span class="doccomment">/// Expose access to the underlying byte array for testing purposes.
-<a href=#191 id=191 data-nosnippet>191</a></span><span class="attr">#[cfg(test)]
-<a href=#192 id=192 data-nosnippet>192</a></span><span class="kw">impl </span>Page {
-<a href=#193 id=193 data-nosnippet>193</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>data_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>[u8; PAGE_SIZE] {
-<a href=#194 id=194 data-nosnippet>194</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>.data
-<a href=#195 id=195 data-nosnippet>195</a>    }
-<a href=#196 id=196 data-nosnippet>196</a>}
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="doccomment">/// Returns an immutable reference to the underlying data of the page.
+<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="kw">pub fn </span>data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8; PAGE_SIZE] {
+<a href=#191 id=191 data-nosnippet>191</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.data
+<a href=#192 id=192 data-nosnippet>192</a>    }
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="doccomment">/// Returns a mutable reference to the underlying byte array of the page
+<a href=#195 id=195 data-nosnippet>195</a>    </span><span class="kw">pub fn </span>data_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>[u8; PAGE_SIZE] {
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>.data
+<a href=#197 id=197 data-nosnippet>197</a>    }
+<a href=#198 id=198 data-nosnippet>198</a>}
 </code></pre></div></section></main></body></html>
