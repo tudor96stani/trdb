@@ -21,10 +21,10 @@ The current feature set that needs to be ported over from the Java implementatio
 
 - [ ] Storage Engine
   - [ ] Page-based storage
-    - [ ] Fixed and variable length records through the use of slotted pages
-    - [ ] Page format with header and data area
+    - [x] Fixed and variable length records through the use of slotted pages
+    - [x] Page format with header and data area
     - [x] Accessors for header (get & set values)
-    - [ ] Heap unsorted pages
+    - [x] Heap unsorted pages
     - [ ] Index sorted pages with multi-key support (up to five key fields, either integers or strings)
   - [ ] B+ Tree indexes
     - [ ] Support for clustered and unclustered indexes
@@ -39,7 +39,7 @@ The current feature set that needs to be ported over from the Java implementatio
     - [ ] B+ tree based storage for indexes—both clustered and unclustered
     - [ ] Table header pages with metadata
   - [ ] Buffer management
-    - [ ] Fixed size buffer pool
+    - [x] Fixed size buffer pool
     - [ ] LRU replacement policy
     - [ ] Dirty page management
     - [ ] Pinning mechanism
