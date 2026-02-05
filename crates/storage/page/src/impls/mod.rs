@@ -185,12 +185,14 @@ impl Page {
             .map_err(PageOpError::from)
             .with_page_id(self.page_id)
     }
-}
 
-/// Expose access to the underlying byte array for testing purposes.
-#[cfg(test)]
-impl Page {
-    pub(super) fn data_mut(&mut self) -> &mut [u8; PAGE_SIZE] {
+    /// Returns an immutable reference to the underlying data of the page.
+    pub fn data(&self) -> &[u8; PAGE_SIZE] {
+        &self.data
+    }
+
+    /// Returns a mutable reference to the underlying byte array of the page
+    pub fn data_mut(&mut self) -> &mut [u8; PAGE_SIZE] {
         &mut self.data
     }
 }

@@ -4,10 +4,11 @@ use crate::errors::header_error::HeaderError;
 use crate::page_id::PageId;
 use crate::page_type::PageType;
 
+// TODO move this to public API
 /// Methods for creating and initializing pages.
 impl Page {
     /// Creates a new page with all bytes initialized to zero. Private constructor.
-    pub(crate) fn new_zeroed(page_id: PageId) -> Self {
+    pub fn new_zeroed(page_id: PageId) -> Self {
         Self {
             page_id,
             data: Box::new([0; PAGE_SIZE]),
@@ -15,7 +16,7 @@ impl Page {
     }
 
     /// Creates a new page from an existing byte array.
-    pub(crate) fn new_from_bytes(bytes: Box<[u8; 4096]>, page_id: PageId) -> Self {
+    pub fn new_from_bytes(bytes: Box<[u8; 4096]>, page_id: PageId) -> Self {
         Self {
             data: bytes,
             page_id,

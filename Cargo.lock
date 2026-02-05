@@ -12,6 +12,10 @@ dependencies = [
 [[package]]
 name = "buffer"
 version = "0.1.0"
+dependencies = [
+ "file",
+ "page",
+]
 
 [[package]]
 name = "file"
@@ -56,6 +60,11 @@ dependencies = [
 [[package]]
 name = "storage-api"
 version = "0.1.0"
+dependencies = [
+ "buffer",
+ "file",
+ "page",
+]
 
 [[package]]
 name = "syn"
@@ -91,6 +100,12 @@ dependencies = [
 [[package]]
 name = "trdb"
 version = "0.1.0"
+dependencies = [
+ "buffer",
+ "file",
+ "page",
+ "storage-api",
+]
 
 [[package]]
 name = "unicode-ident"

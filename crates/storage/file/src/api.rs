@@ -3,6 +3,7 @@
 use crate::file_catalog::FileCatalog;
 use page::page_id::PageId;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// File manager public API
 ///
@@ -21,7 +22,7 @@ pub trait FileManager {
     ///
     /// Return
     /// - `Self`: an instance of the file manager bound to `path`.
-    fn new<P>(path: P, file_catalog: FileCatalog) -> Self
+    fn new<P>(path: P, file_catalog: Arc<FileCatalog>) -> Self
     where
         P: Into<PathBuf>;
 
@@ -51,5 +52,5 @@ pub trait FileManager {
     /// Return
     /// - `()`: No value is returned. Implementations control how they report
     ///   internal failures; this trait does not expose an error type yet.
-    fn write_page(&mut self, page_id: PageId, page_data: &[u8]); //TODO change return type to Result
+    fn write_page(&self, page_id: PageId, page_data: &[u8]); //TODO change return type to Result
 }

@@ -7,6 +7,11 @@ impl Page {
     pub fn page_id(&self) -> PageId {
         self.page_id
     }
+
+    /// Sets the `PageId` field of the page instance
+    pub fn set_page_id(&mut self, page_id: PageId) {
+        self.page_id = page_id;
+    }
 }
 
 #[cfg(test)]

@@ -8,6 +8,15 @@
 //! - `/storage`: Core storage engine handling data persistence and retrieval.
 //!
 //! This binary is the main executable for the database engine.
+
+#![allow(unused)] // Silence compiler warnings about unused code until they are referenced in main binary. TODO: remove this
+
+use crate::engine_environment::EngineEnvironment;
+
+mod engine_environment;
+
 fn main() {
+    let _ = EngineEnvironment::new();
+
     println!("Starting up TRDB server...");
 }
