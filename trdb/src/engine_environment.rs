@@ -8,10 +8,10 @@ use storage_api::storage_manager::StorageManager;
 /// Owner of the singleton-like instances that are needed for the entire lifetime of the server
 #[derive(Debug)]
 pub struct EngineEnvironment {
-    file_manager: Arc<InMemoryFileManager>,
-    buffer: Arc<BufferManager<InMemoryFileManager>>,
-    storage: Arc<StorageManager<InMemoryFileManager>>,
-    file_catalog: Arc<FileCatalog>,
+    pub file_manager: Arc<InMemoryFileManager>,
+    pub buffer: Arc<BufferManager<InMemoryFileManager>>,
+    pub storage: Arc<StorageManager<InMemoryFileManager>>,
+    pub file_catalog: Arc<FileCatalog>,
 }
 
 impl EngineEnvironment {

@@ -1,6 +1,8 @@
 use super::Page;
 use crate::PAGE_SIZE;
 use crate::errors::header_error::HeaderError;
+use crate::errors::page_error::{PageResult, WithPageId};
+use crate::errors::page_op_error::PageOpError;
 use crate::page_id::PageId;
 use crate::page_type::PageType;
 
@@ -30,6 +32,26 @@ impl Page {
         page.header_mut()?.default(page_id.page_number, page_type);
 
         Ok(page)
+    }
+
+    /// Initializes a page for the given `PageId` and `PageType`
+    /// Beware, this method will wipe out the contents of the internal byte array, zero-ing them out.
+    pub fn initialize(&mut self, page_id: PageId, page_type: PageType) -> PageResult<()> {
+        // Completely wipe the page by zero-ing it out.
+        (&mut *self.data)[..].fill(0);
+
+        let mut header = self
+            .header_mut()
+            .map_err(PageOpError::from)
+            .with_page_id(page_id)?;
+
+        // And reset the header for a fresh page.
+        header
+            .default(page_id.page_number, page_type)
+            .map_err(PageOpError::from)
+            .with_page_id(page_id)?;
+
+        Ok(())
     }
 }
 

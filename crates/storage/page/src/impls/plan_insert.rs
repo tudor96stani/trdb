@@ -70,7 +70,7 @@ impl Page {
     /// 3) between last row and `free_start`
     /// 4) after a compaction
     ///
-    /// The probes are short circuiting - the first one to match triggers a return.
+    /// The probes are short-circuiting - the first one to match triggers a return.
     ///
     /// # Arguments
     ///

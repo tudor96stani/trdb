@@ -2,7 +2,7 @@
 
 use crate::errors::BufferError;
 use crate::frame::{BufferFrame, FrameId};
-use crate::guards::PageReadGuard;
+use crate::guards::{PageReadGuard, PageWriteGuard};
 use file::api::FileManager;
 use page::page_id::PageId;
 use std::collections::HashMap;
@@ -61,6 +61,44 @@ impl<F: FileManager> BufferManager<F> {
     /// A `Result` where the `Ok` contains a `PageReadGuard`. A `PageReadGuard` encapsulates the latch
     /// needed to access the underlying `&Page`.
     pub fn read_page(&self, page_id: PageId) -> Result<PageReadGuard<'_>, BufferError> {
+        self.get_or_load_buffered_page(page_id, |s, fid| s.read_guard_from_frame(fid))
+    }
+
+    /// Write guard
+    pub fn read_page_mut(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, BufferError> {
+        self.get_or_load_buffered_page(page_id, |s, fid| s.write_guard_from_frame(fid))
+    }
+
+    /// Finds a free frame and claims it for a new page with the given page ID.
+    ///
+    /// Note that the frame might contain either a zeroed-page or a previous page that was flushed.
+    /// Regardless, the caller is responsible for initializing the page and zero-ing it out.
+    ///
+    /// # Params
+    /// - `page_id`: the ID for the new page.
+    ///
+    /// # Returns
+    /// `PageWriteGuard` instance with write-access to the underlying page.
+    pub fn allocate_new_page(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, BufferError> {
+        let frame_id = self
+            .claim_free_frame(page_id)
+            .ok_or(BufferError::BufferFull)?;
+
+        Ok(self.write_guard_from_frame(frame_id))
+    }
+
+    /// Shared helper that contains the common logic for loading or returning a page from the buffer.
+    /// The `make_guard` closure is responsible for converting a `FrameId` into the requested guard
+    /// (either `PageReadGuard` or `PageWriteGuard`).
+    fn get_or_load_buffered_page<'a, Guard, MakeGuard>(
+        &'a self,
+        page_id: PageId,
+        make_guard: MakeGuard,
+    ) -> Result<Guard, BufferError>
+    where
+        MakeGuard: Fn(&'a Self, FrameId) -> Guard,
+        Guard: 'a,
+    {
         // Check if there is a frame that holds this page
         let possible_page_entry = {
             let map_guard = self.page_map.read().unwrap();
@@ -72,7 +110,7 @@ impl<F: FileManager> BufferManager<F> {
         // a write latch on the page, this will block.
         if let Some(page_entry) = possible_page_entry {
             let fid = Self::wait_until_ready(&page_entry);
-            return Ok(self.read_guard_from_frame(fid));
+            return Ok(make_guard(self, fid));
         }
 
         // From this point, we only have logic for cache miss.
@@ -103,7 +141,7 @@ impl<F: FileManager> BufferManager<F> {
         // Someone else is doing the work, just wait here until they are done
         if !is_loader_thread {
             let frame_id = Self::wait_until_ready(&entry);
-            return Ok(self.read_guard_from_frame(frame_id));
+            return Ok(make_guard(self, frame_id));
         }
 
         // We gotta do the load from disk work ourselves.
@@ -126,6 +164,9 @@ impl<F: FileManager> BufferManager<F> {
         }
 
         // Frame is loaded with page contents.
+        // First get a latch on the page to be able to return it.
+        let guard = make_guard(self, frame_id);
+
         // Lock the state mutex to set it to Ready (no need to add it in the map, already there).
         // Also notify all waiters that the condition has changed.
         {
@@ -134,7 +175,7 @@ impl<F: FileManager> BufferManager<F> {
             entry.cond_var.notify_all();
         }
 
-        Ok(self.read_guard_from_frame(frame_id))
+        Ok(guard)
     }
 
     /// Goes through the `frames` to find an empty one that can be used
@@ -175,10 +216,16 @@ impl<F: FileManager> BufferManager<F> {
         None
     }
 
-    /// Computes a `PageReadGuard` object for a frame.
+    /// Computes a `PageReadGuard` for a frame.
     fn read_guard_from_frame(&self, frame_id: FrameId) -> PageReadGuard<'_> {
         let guard = self.frames[frame_id].page.read().unwrap();
         PageReadGuard { guard }
+    }
+
+    /// Computes a `PageWriteGuard` for a frame.
+    fn write_guard_from_frame(&self, frame_id: FrameId) -> PageWriteGuard<'_> {
+        let guard = self.frames[frame_id].page.write().unwrap();
+        PageWriteGuard { guard }
     }
 
     /// Waits for the `Mutex` on a `PageEntry` to be free to access and the page is loaded into memory

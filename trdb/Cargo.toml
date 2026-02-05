@@ -7,6 +7,6 @@ edition = "2024"
 file = {path = "../crates/storage/file"}
 buffer = {path = "../crates/storage/buffer"}
 storage-api = {path = "../crates/storage/storage-api"}
-
+page = {path = "../crates/storage/page"}
 [lints]
 workspace = true
