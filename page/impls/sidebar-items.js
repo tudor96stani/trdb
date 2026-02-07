@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["accessors","ctors","delete","header_accessors","insert","plan_insert","private","read_row","update"],"struct":["Page"]};
