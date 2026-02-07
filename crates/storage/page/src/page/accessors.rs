@@ -1,4 +1,7 @@
-use crate::impls::Page;
+use crate::HEADER_SIZE;
+use crate::errors::header_error::HeaderError;
+use crate::header::{HeaderMut, HeaderRef};
+use crate::page::api::Page;
 use crate::page_id::PageId;
 
 /// Accessor methods for the `Page` struct.
@@ -11,6 +14,16 @@ impl Page {
     /// Sets the `PageId` field of the page instance
     pub fn set_page_id(&mut self, page_id: PageId) {
         self.page_id = page_id;
+    }
+
+    /// Returns a read-only reference to the page header.
+    pub(crate) fn header_ref(&'_ self) -> Result<HeaderRef<'_>, HeaderError> {
+        HeaderRef::new(&self.data[..HEADER_SIZE])
+    }
+
+    /// Returns a mutable reference to the page header.
+    pub(crate) fn header_mut(&'_ mut self) -> Result<HeaderMut<'_>, HeaderError> {
+        HeaderMut::new(&mut self.data[..HEADER_SIZE])
     }
 }
 

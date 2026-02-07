@@ -1,7 +1,7 @@
 use crate::HEADER_SIZE;
 use crate::errors::delete_error::DeleteError;
 use crate::errors::slot_error::SlotError;
-use crate::impls::Page;
+use crate::page::api::Page;
 
 impl Page {
     pub(super) fn delete_row_internal(

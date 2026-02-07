@@ -1,7 +1,7 @@
 use crate::errors::insert_error::InsertError;
 use crate::errors::slot_error::SlotError;
-use crate::impls::Page;
 use crate::insertion_plan::{InsertionOffset, InsertionPlan, InsertionSlot};
+use crate::page::api::Page;
 use crate::slot::{SLOT_SIZE, SlotRef};
 
 impl Page {

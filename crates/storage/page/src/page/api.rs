@@ -1,68 +1,50 @@
-//! Module defining a fixed-size slotted page structure with its associated methods.
-//!
-//! # Memory Layout Overview
-//!
-//! A typical slotted page has this physical structure (generalized):
-//!
-//! ```text
-//!   ┌───────────────────────────────────────────────────────────────┐
-//!   │ Page Header (contains slot_count, free space ptrs, etc.)      │
-//!   ├───────────────────────────────────────────────────────────────┤
-//!   │ Tuple Data Region (grows upward)                              │
-//!   │   records / row fragments                                     │
-//!   │   variable sized                                              │
-//!   │   aligned upwards                                             │
-//!   ├───────────────────────────────────────────────────────────────┤
-//!   │ Free Space                                                    │
-//!   ├───────────────────────────────────────────────────────────────┤
-//!   │ Slot Array Region (grows downward)                            │
-//!   │   fixed-size SLOT_SIZE entries                                │
-//!   │   indexed logically left-to-right,                            │
-//!   │   stored physically right-to-left                             │
-//!   └───────────────────────────────────────────────────────────────┘
-//!
-//!                     ↑ page_start                        page_end ↑
-//! ```
-//!
-//! # Why This Design?
-//!
-//! - Adding a new slot does **not** require moving existing slots.
-//! - Tuple movement and compaction only affect the data region.
-//! - Both read and write operations are zero-copy and O(1).
-//!
-//! This module encapsulates that logic cleanly, exposing a safe and API for manipulating the slotted page.
-//!
-//!
-//! Header access is provided via `header::HeaderRef` and `header::HeaderMut` types.
-//! Slot array access is provided via `slot::SlotArrayRef` and `slot::SlotArrayMut` types.
 use crate::PAGE_SIZE;
 use crate::errors::page_error::{PageResult, WithPageId};
 use crate::errors::page_op_error::PageOpError;
 use crate::insertion_plan::InsertionPlan;
 use crate::page_id::PageId;
-
-mod accessors;
-mod ctors;
-mod delete;
-mod header_accessors;
-mod insert;
-mod plan_insert;
-mod private;
-mod read_row;
-mod update;
+use crate::page_type::PageType;
 
 /// Wrapper around a fixed-size byte array representing a page.
 #[derive(Debug)]
 pub struct Page {
     /// Unique identifier of the page. Comprised of file_name_hash::page_number_within_file
-    page_id: PageId,
+    pub(crate) page_id: PageId,
     /// Main binary array holding the `PAGE_SIZE` bytes of data for the page. Boxed and owned by this struct.
-    data: Box<[u8; PAGE_SIZE]>,
+    pub(crate) data: Box<[u8; PAGE_SIZE]>,
 }
 
 /// Public APIs for the Page struct.
 /// All public APIs use the `PageResult` type
 impl Page {
+    /// Creates a new page with all bytes initialized to zero. Private constructor.
+    pub fn new_zeroed(page_id: PageId) -> Self {
+        Self {
+            page_id,
+            data: Box::new([0; PAGE_SIZE]),
+        }
+    }
+
+    /// Initializes a page for the given `PageId` and `PageType`
+    /// Beware, this method will wipe out the contents of the internal byte array, zero-ing them out.
+    pub fn initialize(&mut self, page_id: PageId, page_type: PageType) -> PageResult<()> {
+        // Completely wipe the page by zero-ing it out.
+        (&mut *self.data)[..].fill(0);
+
+        let mut header = self
+            .header_mut()
+            .map_err(PageOpError::from)
+            .with_page_id(page_id)?;
+
+        // And reset the header for a fresh page.
+        header
+            .default(page_id.page_number, page_type)
+            .map_err(PageOpError::from)
+            .with_page_id(page_id)?;
+
+        Ok(())
+    }
+
     /// Retrieves a row from the page by its slot index.
     ///
     /// # Arguments

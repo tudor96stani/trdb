@@ -1,4 +1,4 @@
-use page::impls::Page;
+use page::page::api::Page;
 use std::ops::{Deref, DerefMut};
 use std::sync::{RwLockReadGuard, RwLockWriteGuard};
 

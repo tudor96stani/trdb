@@ -6,7 +6,7 @@ mod read_row_test {
     use crate::errors::page_op_error::PageOpError;
     use crate::errors::read_row_error::ReadRowError;
     use crate::errors::slot_error::SlotError;
-    use crate::impls::Page;
+    use crate::page::api::Page;
     use crate::page_id::PageId;
     use crate::page_type::PageType;
     use crate::slot::SlotMut;

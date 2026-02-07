@@ -1,11 +1,11 @@
-use super::Page;
 use crate::errors::header_error::HeaderError;
 use crate::errors::slot_error::SlotError;
+use crate::page::api::Page;
 use crate::slot::{SLOT_SIZE, SlotRef};
 use crate::slot_array::{SlotArrayMut, SlotArrayRef};
 use crate::{HEADER_SIZE, PAGE_SIZE};
 
-/// Private methods for the `Page` struct.
+/// Internal methods for the `Page` struct.
 impl Page {
     /// Returns an immutable view of the slot array.
     #[inline]

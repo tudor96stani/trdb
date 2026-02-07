@@ -4,7 +4,7 @@ use buffer::guards::{PageReadGuard, PageWriteGuard};
 use file::api::FileManager;
 use file::file_catalog::FileCatalog;
 use file::in_memory_file_manager::InMemoryFileManager;
-use page::impls::Page;
+use page::page::api::Page;
 use page::page_id::PageId;
 use std::sync::Arc;
 

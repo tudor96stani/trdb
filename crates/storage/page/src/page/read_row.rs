@@ -1,5 +1,5 @@
 use crate::errors::read_row_error::ReadRowError;
-use crate::impls::Page;
+use crate::page::api::Page;
 
 /// Internal row access methods for the `Page` struct.
 impl Page {

@@ -1,4 +1,4 @@
-use page::impls::Page;
+use page::page::api::Page;
 use page::page_id::PageId;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU32};

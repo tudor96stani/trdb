@@ -6,7 +6,7 @@ mod tests {
     use crate::errors::page_op_error::PageOpError;
     use crate::errors::slot_error::SlotError;
     use crate::errors::update_error::UpdateError;
-    use crate::impls::Page;
+    use crate::page::api::Page;
     use crate::tests::SlotValues;
     use crate::tests::tests_error_helpers;
 

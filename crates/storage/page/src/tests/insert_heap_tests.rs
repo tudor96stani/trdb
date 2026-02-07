@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::impls::Page;
     use crate::insertion_plan::{InsertionOffset, InsertionPlan, InsertionSlot};
+    use crate::page::api::Page;
     use crate::page_id::PageId;
     use crate::page_type::PageType;
     use crate::slot::SLOT_SIZE;

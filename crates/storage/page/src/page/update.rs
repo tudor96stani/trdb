@@ -1,8 +1,8 @@
 use crate::errors::header_error::HeaderError;
 use crate::errors::slot_error::SlotError;
 use crate::errors::update_error::UpdateError;
-use crate::impls::Page;
 use crate::insertion_plan::InsertionOffset;
+use crate::page::api::Page;
 use binary_helpers::conversions::UsizeConversion;
 
 impl Page {

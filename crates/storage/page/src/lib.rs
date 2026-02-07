@@ -7,7 +7,7 @@
 pub mod header;
 
 /// Slotted structure and related functionality.
-pub mod impls;
+pub mod page;
 
 /// Unique identifier for pages.
 pub mod page_id;
@@ -21,7 +21,7 @@ mod slot_array;
 mod tests;
 
 /// Fixed-size of a page in bytes
-const PAGE_SIZE: usize = 4096;
+pub const PAGE_SIZE: usize = 4096;
 
 /// Size of the header in bytes.
 const HEADER_SIZE: usize = 96;

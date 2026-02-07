@@ -3,8 +3,8 @@ mod plan_insert_test {
     use super::*;
     use crate::errors::insert_error::InsertError;
     use crate::errors::page_op_error::PageOpError;
-    use crate::impls::Page;
     use crate::insertion_plan::{InsertionOffset, InsertionSlot};
+    use crate::page::api::Page;
     use crate::page_id::PageId;
     use crate::page_type::PageType;
     use crate::slot::SLOT_SIZE;
