@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["HEADER_SIZE","PAGE_SIZE"],"mod":["errors","header","insertion_plan","page","page_id","page_type","slot","slot_array","tests"]};
+window.SIDEBAR_ITEMS = {"constant":["HEADER_SIZE","PAGE_SIZE"],"mod":["errors","header","insertion_plan","page","page_id","page_type","slot","slot_array"]};
