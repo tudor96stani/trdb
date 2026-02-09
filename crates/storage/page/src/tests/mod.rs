@@ -6,10 +6,15 @@ use crate::page_type::PageType;
 use crate::slot::SLOT_SIZE;
 use crate::{HEADER_SIZE, PAGE_SIZE};
 
+#[cfg(test)]
 mod delete_row_tests;
+#[cfg(test)]
 mod insert_heap_tests;
+#[cfg(test)]
 mod plan_insert_tests;
+#[cfg(test)]
 mod read_row_tests;
+#[cfg(test)]
 mod update_row_tests;
 
 /// This section defines helper methods for the test suite. They are defined as methods on the `Page` struct, but are only available in the test environment.

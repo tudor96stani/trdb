@@ -42,6 +42,9 @@ impl Page {
             .map_err(PageOpError::from)
             .with_page_id(page_id)?;
 
+        // Set the page ID
+        self.set_page_id(page_id);
+
         Ok(())
     }
 

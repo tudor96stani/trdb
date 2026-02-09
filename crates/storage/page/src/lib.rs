@@ -18,6 +18,8 @@ pub mod insertion_plan;
 pub mod page_type;
 mod slot;
 mod slot_array;
+
+#[cfg(test)]
 mod tests;
 
 /// Fixed-size of a page in bytes

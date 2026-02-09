@@ -242,3 +242,280 @@ impl<F: FileManager> BufferManager<F> {
         }
     }
 }
+
+// ------------------------------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use crate::buffer::{BufferManager, PageEntry, PageState};
+    use crate::frame::FrameId;
+    use file::api::FileManager;
+    use file::file_catalog::FileCatalog;
+    use page::page_id::PageId;
+    use page::page_type::PageType;
+    use std::path::PathBuf;
+    use std::sync::atomic::Ordering;
+    use std::sync::{Arc, Condvar, Mutex, RwLock};
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+
+    struct MockFileManager {
+        requested_pages: RwLock<Vec<PageId>>,
+    }
+
+    impl FileManager for MockFileManager {
+        fn new<P>(_: P, _: Arc<FileCatalog>) -> Self
+        where
+            P: Into<PathBuf>,
+        {
+            Self {
+                requested_pages: RwLock::new(Vec::new()),
+            }
+        }
+
+        fn read_page(&self, page_id: PageId, _: &mut [u8]) -> bool {
+            self.requested_pages.write().unwrap().push(page_id);
+            true
+        }
+
+        fn write_page(&self, _: PageId, _: &[u8]) {}
+    }
+
+    fn create_buffer_manager(of_size: usize) -> BufferManager<MockFileManager> {
+        let fm = Arc::new(MockFileManager::new("", Arc::new(FileCatalog::new())));
+        BufferManager::new(fm.clone(), of_size)
+    }
+
+    #[test]
+    fn constructor_sets_fields() {
+        // Arrange & Act
+        let buffer = create_buffer_manager(10);
+
+        // Assert
+        assert_eq!(buffer.frames.len(), 10);
+        assert!(
+            buffer
+                .frames
+                .iter()
+                .all(|f| f.page_id.read().unwrap().is_none())
+        );
+        assert!(
+            buffer
+                .frames
+                .iter()
+                .all(|f| f.page.read().unwrap().data().iter().all(|b| *b == 0u8))
+        );
+        assert!(
+            buffer
+                .frames
+                .iter()
+                .all(|f| f.pin_count.load(Ordering::Relaxed) == 0)
+        );
+        assert!(
+            buffer
+                .frames
+                .iter()
+                .all(|f| !f.dirty.load(Ordering::Relaxed))
+        );
+
+        assert!(buffer.page_map.read().unwrap().is_empty());
+    }
+
+    #[test]
+    fn read_page_already_cached_returns_page_directly() {
+        // Arrange
+        let buffer = create_buffer_manager(10);
+        let page_id = PageId::new(1, 1);
+        let frame_id: FrameId = 0;
+
+        {
+            let frames = &buffer.frames;
+            let frame = frames.get(frame_id).unwrap();
+            let mut page_id_write_guard = frame.page_id.write().unwrap();
+            *page_id_write_guard = Some(page_id);
+
+            let mut page_write_guard = frame.page.write().unwrap();
+            page_write_guard
+                .initialize(page_id, PageType::Unsorted)
+                .unwrap();
+        }
+
+        {
+            let page_map = &buffer.page_map;
+            let mut map_write_guard = page_map.write().unwrap();
+            map_write_guard.insert(
+                page_id,
+                Arc::new(PageEntry {
+                    state: Mutex::new(PageState::Ready(frame_id)),
+                    cond_var: Condvar::new(),
+                }),
+            );
+        }
+
+        // Act
+        let result = buffer.read_page(page_id).unwrap();
+
+        // Assert
+        assert_eq!(result.page_id(), page_id);
+        assert_eq!(buffer.file_manager.requested_pages.read().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn read_page_not_cached_load_from_disk() {
+        // Arrange
+        let buffer = create_buffer_manager(10);
+        let page_id = PageId::new(1, 1);
+
+        assert_eq!(buffer.page_map.read().unwrap().len(), 0);
+
+        // Act
+        let result = buffer.read_page(page_id).unwrap();
+
+        // Arrange
+        // we got the right page
+        assert_eq!(result.page_id(), page_id);
+        // read page from file manager only once
+        assert_eq!(buffer.file_manager.requested_pages.read().unwrap().len(), 1);
+        // only one entry in the page map
+        assert_eq!(buffer.page_map.read().unwrap().len(), 1);
+        // frames[0] contains our page
+        assert_eq!(buffer.frames[0].page_id.read().unwrap().unwrap(), page_id);
+    }
+
+    #[test]
+    fn read_page_mut_not_cached_load_from_disk() {
+        // Arrange
+        let buffer = create_buffer_manager(10);
+        let page_id = PageId::new(1, 1);
+
+        assert_eq!(buffer.page_map.read().unwrap().len(), 0);
+
+        // Act
+        let result = buffer.read_page_mut(page_id).unwrap();
+
+        // Arrange
+        // we got the right page
+        assert_eq!(result.page_id(), page_id);
+        // read page from file manager only once
+        assert_eq!(buffer.file_manager.requested_pages.read().unwrap().len(), 1);
+        // only one entry in the page map
+        assert_eq!(buffer.page_map.read().unwrap().len(), 1);
+        // frames[0] contains our page
+        assert_eq!(buffer.frames[0].page_id.read().unwrap().unwrap(), page_id);
+
+        // Only an assertion to check that the mutable deref of the PageWriteGuard works.
+        let mut page_mut = result;
+        let _ = page_mut.data_mut();
+    }
+
+    #[test]
+    fn wait_until_ready_blocks_until_another_thread_sets_ready() {
+        use page::page_type::PageType;
+        // Arrange
+        let buffer = create_buffer_manager(1);
+        let page_id = PageId::new(1, 1);
+        let frame_id: FrameId = 0;
+
+        // Insert an entry in Loading state into the page_map
+        let entry = Arc::new(PageEntry {
+            state: Mutex::new(PageState::Loading),
+            cond_var: Condvar::new(),
+        });
+        {
+            let mut map = buffer.page_map.write().unwrap();
+            map.insert(page_id, entry.clone());
+        }
+
+        // Prepare the frame with the page so that when Ready is set, read_guard_from_frame works
+        {
+            let frame = &buffer.frames[frame_id];
+            *frame.page_id.write().unwrap() = Some(page_id);
+            let mut page_write = frame.page.write().unwrap();
+            page_write.initialize(page_id, PageType::Unsorted).unwrap();
+        }
+
+        // Spawn a thread that will set the entry to Ready after a short sleep and notify
+        let sleep_ms = 50u64;
+        let entry_cloned = entry.clone();
+        let handle = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(sleep_ms));
+            let mut st = entry_cloned.state.lock().unwrap();
+            *st = PageState::Ready(frame_id);
+            entry_cloned.cond_var.notify_all();
+        });
+
+        // Act: calling read_page should block until the other thread sets Ready
+        let start = Instant::now();
+        let guard = buffer.read_page(page_id).unwrap();
+        let elapsed = start.elapsed();
+
+        // Assert: it waited at least the sleep duration and returned the correct page
+        assert!(elapsed >= Duration::from_millis(sleep_ms));
+        assert_eq!(guard.page_id(), page_id);
+
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn claim_free_frame_skips_locked_and_claims_first_free() {
+        // Arrange
+        let buffer = create_buffer_manager(3);
+        let target_page = PageId::new(9, 9);
+
+        {
+            // Simulate a locked frame (will cause try_write to return WouldBlock)
+            // Need to wrap this whole part in a code block to ensure _locked_guard gets dropped before the 2nd part of the test
+            let _locked_guard = buffer.frames[0].page_id.write().unwrap();
+
+            // Simulate an occupied frame (page_id = Some)
+            {
+                let mut w = buffer.frames[1].page_id.write().unwrap();
+                *w = Some(PageId::new(2, 2));
+            }
+
+            // frame 2 is free and should be claimed
+            let claimed = buffer.claim_free_frame(target_page);
+            assert_eq!(claimed, Some(2));
+
+            // Assert frame metadata was initialized
+            assert_eq!(
+                buffer.frames[2].page_id.read().unwrap().unwrap(),
+                target_page
+            );
+            assert_eq!(buffer.frames[2].pin_count.load(Ordering::Relaxed), 1);
+            assert!(!buffer.frames[2].dirty.load(Ordering::Relaxed));
+        } // frames[0] released here.
+
+        // Now mark all frames as occupied and ensure None is returned
+        for i in 0..3 {
+            let mut w = buffer.frames[i].page_id.write().unwrap();
+            *w = Some(PageId::new(i as u32, i as u32));
+        }
+        let none_result = buffer.claim_free_frame(PageId::new(99, 99));
+        assert!(none_result.is_none());
+    }
+
+    #[test]
+    fn claim_free_frame_skips_poisoned_frame() {
+        // Arrange
+        let buffer = create_buffer_manager(2);
+
+        // Use a scoped thread so we can borrow `buffer.frames` safely without requiring 'static.
+        // The spawned closure panics while holding the write lock, poisoning the RwLock.
+        thread::scope(|s| {
+            let handle = s.spawn(|| {
+                let _guard = buffer.frames[0].page_id.write().unwrap();
+                panic!("simulate panic while holding lock");
+                // _guard gets dropped during unwind, poisoning the lock
+            });
+            // Join the scoped handle; it will return Err because the thread panicked.
+            let _ = handle.join();
+        });
+
+        // Act
+        let claimed = buffer.claim_free_frame(PageId::new(99, 99));
+        assert_eq!(claimed, Some(1));
+    }
+}
