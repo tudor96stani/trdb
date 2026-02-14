@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["main"],"mod":["engine_environment"]};
+window.SIDEBAR_ITEMS = {"fn":["handle_client","main","process_query"],"mod":["engine_environment"]};
