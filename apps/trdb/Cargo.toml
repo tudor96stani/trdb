@@ -1,0 +1,13 @@
+[package]
+name = "trdb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+file = {path = "../../crates/storage/file" }
+buffer = {path = "../../crates/storage/buffer" }
+storage-api = {path = "../../crates/storage/storage-api" }
+page = {path = "../../crates/storage/page" }
+tokio = { version = "1.49.0", features = ["full"] }
+[lints]
+workspace = true

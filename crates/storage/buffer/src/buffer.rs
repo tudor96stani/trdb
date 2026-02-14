@@ -84,6 +84,17 @@ impl<F: FileManager> BufferManager<F> {
             .claim_free_frame(page_id)
             .ok_or(BufferError::BufferFull)?;
 
+        {
+            let mut map_guard = self.page_map.write().unwrap();
+            map_guard.insert(
+                page_id,
+                Arc::new(PageEntry {
+                    state: Mutex::new(PageState::Ready(frame_id)),
+                    cond_var: Condvar::new(),
+                }),
+            );
+        }
+
         Ok(self.write_guard_from_frame(frame_id))
     }
 
