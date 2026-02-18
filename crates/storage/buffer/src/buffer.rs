@@ -8,6 +8,8 @@ use page::page_id::PageId;
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Condvar, Mutex, RwLock, TryLockError};
+#[cfg(test)]
+use std::sync::{Barrier, OnceLock};
 
 /// The state of the page in the buffer
 #[derive(Debug)]
@@ -33,6 +35,8 @@ pub struct BufferManager<F: FileManager> {
     file_manager: Arc<F>,
     page_map: RwLock<HashMap<PageId, Arc<PageEntry>>>,
     frames: Vec<BufferFrame>,
+    #[cfg(test)]
+    hooks: OnceLock<Arc<Barrier>>,
 }
 
 impl<F: FileManager> BufferManager<F> {
@@ -48,6 +52,8 @@ impl<F: FileManager> BufferManager<F> {
             file_manager,
             frames,
             page_map: RwLock::new(HashMap::new()),
+            #[cfg(test)]
+            hooks: OnceLock::new(),
         }
     }
 
@@ -126,6 +132,12 @@ impl<F: FileManager> BufferManager<F> {
 
         // From this point, we only have logic for cache miss.
 
+        // A place to inject a barrier hook in testing. Not included in release builds.
+        // Pauses the execution of all threads on a `Barrier`, until all of them reach this place
+        // Used to test some race conditions.
+        #[cfg(test)]
+        self.test_pause();
+
         // First we have to lock the map again, this time for write, and check if no one added the entry
         // in the meantime. This will only temporarily lock the entire map.
         let (entry, is_loader_thread) = {
@@ -165,8 +177,9 @@ impl<F: FileManager> BufferManager<F> {
             // Ask the file manager to load data from disk directly into the byte array of the page
             // instance from the buffer frame
             if !self.file_manager.read_page(page_id, page.data_mut()) {
-                // rollback claim
+                // rollback claim and remove entry from map.
                 *self.frames[frame_id].page_id.write().unwrap() = None;
+                self.page_map.write().unwrap().remove(&page_id);
                 return Err(BufferError::IoReadFailed(page_id));
             }
 
@@ -254,11 +267,31 @@ impl<F: FileManager> BufferManager<F> {
     }
 }
 
+#[cfg(test)]
+impl<F: FileManager> BufferManager<F> {
+    /// Attempts to pause all running threads at the barrier provided in the test setup
+    /// Should be removed by compiler for release builds that do not target cfg(test)
+    #[inline(always)]
+    fn test_pause(&self) {
+        #[cfg(test)]
+        if let Some(b) = &self.hooks.get() {
+            b.wait();
+        }
+        // non-test: nothing
+    }
+
+    /// Setter for the barrier used in testing
+    pub fn set_test_gate(&self, gate: Arc<Barrier>) {
+        let _ = self.hooks.set(gate);
+    }
+}
+
 // ------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use crate::buffer::{BufferManager, PageEntry, PageState};
+    use crate::errors::BufferError;
     use crate::frame::FrameId;
     use file::api::FileManager;
     use file::file_catalog::FileCatalog;
@@ -266,7 +299,7 @@ mod tests {
     use page::page_type::PageType;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
-    use std::sync::{Arc, Condvar, Mutex, RwLock};
+    use std::sync::{Arc, Barrier, Condvar, Mutex, RwLock};
     use std::{
         thread,
         time::{Duration, Instant},
@@ -274,6 +307,7 @@ mod tests {
 
     struct MockFileManager {
         requested_pages: RwLock<Vec<PageId>>,
+        sleep_duration: RwLock<Duration>,
     }
 
     impl FileManager for MockFileManager {
@@ -283,15 +317,24 @@ mod tests {
         {
             Self {
                 requested_pages: RwLock::new(Vec::new()),
+                sleep_duration: RwLock::new(Duration::from_millis(0)),
             }
         }
 
         fn read_page(&self, page_id: PageId, _: &mut [u8]) -> bool {
+            let duration = self.sleep_duration.read().unwrap();
+            thread::sleep(*duration);
             self.requested_pages.write().unwrap().push(page_id);
             true
         }
 
         fn write_page(&self, _: PageId, _: &[u8]) {}
+    }
+
+    impl MockFileManager {
+        fn set_sleep_duration(&self, duration: Duration) {
+            *self.sleep_duration.write().unwrap() = duration;
+        }
     }
 
     fn create_buffer_manager(of_size: usize) -> BufferManager<MockFileManager> {
@@ -528,5 +571,81 @@ mod tests {
         // Act
         let claimed = buffer.claim_free_frame(PageId::new(99, 99));
         assert_eq!(claimed, Some(1));
+    }
+
+    #[test]
+    fn read_page_race_condition_loader_and_waiter_threads_only_one_reads_from_disk() {
+        let buffer = Arc::new(create_buffer_manager(2));
+        buffer
+            .file_manager
+            .set_sleep_duration(Duration::from_millis(100));
+        let barrier = Arc::new(Barrier::new(2));
+        buffer.set_test_gate(barrier.clone());
+
+        let first_thread_buffer = buffer.clone();
+        let second_thread_buffer = buffer.clone();
+        let page_id = PageId::new(1, 1);
+
+        let first_handle = thread::spawn(move || {
+            first_thread_buffer.read_page(page_id).unwrap();
+        });
+
+        let second_handle = thread::spawn(move || {
+            second_thread_buffer.read_page(page_id).unwrap();
+        });
+
+        first_handle.join().unwrap();
+        second_handle.join().unwrap();
+
+        assert_eq!(buffer.file_manager.requested_pages.read().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn read_page_file_manager_returns_error_frame_released() {
+        struct FailingFileManager;
+        impl FileManager for FailingFileManager {
+            fn new<P>(_: P, _: Arc<FileCatalog>) -> Self
+            where
+                P: Into<PathBuf>,
+            {
+                Self
+            }
+
+            fn read_page(&self, _: PageId, _: &mut [u8]) -> bool {
+                false
+            }
+
+            fn write_page(&self, _: PageId, _: &[u8]) {}
+        }
+        let page_id = PageId::new(1, 1);
+
+        let buffer = BufferManager::new(
+            Arc::new(FailingFileManager::new("", Arc::new(FileCatalog::new()))),
+            10,
+        );
+
+        let result = buffer.read_page(page_id).unwrap_err();
+
+        assert!(matches!(result, BufferError::IoReadFailed(pageid) if pageid == page_id));
+        assert!(
+            buffer
+                .frames
+                .iter()
+                .all(|f| f.page_id.read().unwrap().is_none())
+        );
+        assert_eq!(buffer.page_map.read().unwrap().len(), 0)
+    }
+
+    #[test]
+    fn allocate_new_page_correct_metadata_and_page_allocation() {
+        let buffer = create_buffer_manager(100);
+        let page_id = PageId::new(1, 1);
+
+        let _ = buffer.allocate_new_page(page_id).unwrap();
+
+        assert!(buffer.page_map.read().unwrap().contains_key(&page_id));
+        assert_eq!(buffer.frames[0].page_id.read().unwrap().unwrap(), page_id);
+        assert!(!buffer.frames[0].dirty.load(Ordering::Relaxed));
+        assert_eq!(buffer.frames[0].pin_count.load(Ordering::Relaxed), 1);
     }
 }
