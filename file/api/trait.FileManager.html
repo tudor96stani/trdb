@@ -2,8 +2,8 @@
     // Required methods
     fn <a href="#tymethod.new" class="fn">new</a>&lt;P&gt;(path: P, file_catalog: <a class="struct" href="https://doc.rust-lang.org/1.93.1/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../file_catalog/struct.FileCatalog.html" title="struct file::file_catalog::FileCatalog">FileCatalog</a>&gt;) -&gt; Self
        <span class="where">where P: <a class="trait" href="https://doc.rust-lang.org/1.93.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.93.1/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>&gt;</span>;
-<span class="item-spacer"></span>    fn <a href="#tymethod.read_page" class="fn">read_page</a>(&amp;self, page_id: <a class="struct" href="../../page/page_id/struct.PageId.html" title="struct page::page_id::PageId">PageId</a>, destination: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.bool.html">bool</a>;
-<span class="item-spacer"></span>    fn <a href="#tymethod.write_page" class="fn">write_page</a>(&amp;self, page_id: <a class="struct" href="../../page/page_id/struct.PageId.html" title="struct page::page_id::PageId">PageId</a>, page_data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_page" class="fn">read_page</a>(&amp;self, page_id: PageId, destination: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_page" class="fn">write_page</a>(&amp;self, page_id: PageId, page_data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>]);
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>File manager public API</p>
 <p>A <code>FileManager</code> manages a collection of fixed-size pages addressed by
 <code>PageId</code>. Implementations are free to choose the backing storage layout and
@@ -22,7 +22,7 @@ implementation).</li>
 <ul>
 <li><code>Self</code>: an instance of the file manager bound to <code>path</code>.</li>
 </ul>
-</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_page" class="method"><a class="src rightside" href="../../src/file/api.rs.html#42">Source</a><h4 class="code-header">fn <a href="#tymethod.read_page" class="fn">read_page</a>(&amp;self, page_id: <a class="struct" href="../../page/page_id/struct.PageId.html" title="struct page::page_id::PageId">PageId</a>, destination: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Definition
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_page" class="method"><a class="src rightside" href="../../src/file/api.rs.html#42">Source</a><h4 class="code-header">fn <a href="#tymethod.read_page" class="fn">read_page</a>(&amp;self, page_id: PageId, destination: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Definition
 Read the page identified by <code>page_id</code> into <code>destination</code>.</p>
 <p>Params</p>
 <ul>
@@ -37,7 +37,7 @@ buffer length must equal the storage page size.</li>
 may decide how to handle buffer-size mismatches (see implementation
 docs / future error types).</li>
 </ul>
-</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_page" class="method"><a class="src rightside" href="../../src/file/api.rs.html#55">Source</a><h4 class="code-header">fn <a href="#tymethod.write_page" class="fn">write_page</a>(&amp;self, page_id: <a class="struct" href="../../page/page_id/struct.PageId.html" title="struct page::page_id::PageId">PageId</a>, page_data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Definition
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_page" class="method"><a class="src rightside" href="../../src/file/api.rs.html#55">Source</a><h4 class="code-header">fn <a href="#tymethod.write_page" class="fn">write_page</a>(&amp;self, page_id: PageId, page_data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.93.1/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Definition
 Write the contents of <code>page_data</code> as the page for <code>page_id</code>.</p>
 <p>Params</p>
 <ul>
