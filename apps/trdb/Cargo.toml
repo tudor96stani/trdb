@@ -9,5 +9,11 @@ buffer = {path = "../../crates/storage/buffer" }
 storage-api = {path = "../../crates/storage/storage-api" }
 page = {path = "../../crates/storage/page" }
 tokio = { version = "1.49.0", features = ["full"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+tokio-util = "0.7.18"
+
+
 [lints]
 workspace = true

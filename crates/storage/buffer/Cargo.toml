@@ -6,5 +6,7 @@ edition = "2024"
 [dependencies]
 file = { path = "../file" }
 page = {path = "../page"}
+tracing.workspace = true
+
 [lints]
 workspace = true

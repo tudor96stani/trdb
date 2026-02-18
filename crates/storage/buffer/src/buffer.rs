@@ -44,6 +44,7 @@ impl<F: FileManager> BufferManager<F> {
     /// Allocates a predefined number of buffer frames.
     /// Sets up internal structures required for managing the pool.
     pub fn new(file_manager: Arc<F>, pool_size: usize) -> Self {
+        tracing::info!("Starting up buffer manager with {} frames", pool_size);
         let mut frames = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
             frames.push(BufferFrame::default());
@@ -86,6 +87,7 @@ impl<F: FileManager> BufferManager<F> {
     /// # Returns
     /// `PageWriteGuard` instance with write-access to the underlying page.
     pub fn allocate_new_page(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, BufferError> {
+        tracing::info!("Allocating new page {} for buffer manager", page_id);
         let frame_id = self
             .claim_free_frame(page_id)
             .ok_or(BufferError::BufferFull)?;

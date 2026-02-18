@@ -15,3 +15,6 @@ missing_debug_implementations = "warn"
 [workspace.dependencies]
 thiserror = "2.0.17"
 paste = "1.0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "time"] }
+tracing-appender = "0.2"
