@@ -11,12 +11,12 @@
 
 #![allow(unused)] // Silence compiler warnings about unused code until they are referenced in main binary. TODO: remove this
 
+use crate::config::EngineConfig;
 use crate::engine_environment::EngineEnvironment;
-use page::insertion_plan::InsertionSlot;
-use page::page_id;
 use page::page_id::PageId;
 use page::page_type::PageType;
 use std::error::Error;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -29,15 +29,24 @@ use tracing_subscriber::{
     EnvFilter, filter::LevelFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
+mod config;
 mod engine_environment;
 
 // Temporarily placed a lot of logic in here for creating the TCP server, handling client requests, delegating them to the engine for processing, etc
 // All of this will be stripped into separate crates/modules, but for now it will do.
 #[tokio::main]
 async fn main() {
-    let logging_guard = init_logging("./logs");
+    let cfg = match EngineConfig::load_from_file("trdb.toml") {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
 
-    let e = Arc::new(EngineEnvironment::new());
+    let logging_guard = init_logging(&cfg.storage.logs_dir);
+
+    let e = Arc::new(EngineEnvironment::new(cfg));
 
     // dummy page
     let page_id = PageId::new(1, 1);
@@ -129,57 +138,93 @@ async fn wait_for_shutdown_signal() {
 }
 
 async fn handle_client(
-    mut socket: TcpStream,
+    socket: TcpStream,
     env: Arc<EngineEnvironment>,
     semaphore: Arc<Semaphore>,
     shutdown: CancellationToken,
 ) {
-    tracing::info!("client connected on {:?}", socket.peer_addr());
+    // Capture peer address early for logging
+    let peer = socket.peer_addr().ok();
+    tracing::info!("client connected on {:?}", peer);
 
-    // for now the client only sends a u32.
-    let mut buf = [0u8; 4];
+    // Split the socket so we can read and write concurrently from different tasks.
+    let (mut reader, writer) = socket.into_split();
 
-    let read_res = tokio::select! {
-        _ = shutdown.cancelled() => {
-            tracing::info!("shutdown: stop reading new requests");
-            return;
+    // mpsc channel for workers to send completed rows to the writer task
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+
+    // Spawn a dedicated writer task that serializes all writes to the connection
+    let peer_for_writer = peer;
+    let writer_handle = tokio::spawn(async move {
+        let mut writer = writer;
+        while let Some(msg) = rx.recv().await {
+            if let Err(e) = writer.write_all(&msg).await {
+                tracing::error!(
+                    "error while writing result to client {:?}: {}",
+                    peer_for_writer,
+                    e
+                );
+                break;
+            }
         }
-        r = socket.read_exact(&mut buf) => r,
-    };
+        tracing::info!("writer task exiting for client {:?}", peer_for_writer);
+    });
 
-    if read_res.is_err() {
-        tracing::error!(
-            "error while reading data from socket for client {:?}",
-            socket.peer_addr()
-        );
-        return;
-    }
-    let _value = u32::from_le_bytes(buf);
+    // Serve multiple requests over the same connection until the client disconnects or shutdown is triggered
+    loop {
+        // for now the client only sends a u32.
+        let mut buf = [0u8; 4];
 
-    // Ask for a permit from the semaphore
-    let permit = tokio::select! {
-        _ = shutdown.cancelled() => {
-            tracing::info!("shutdown: refuse starting new query");
-            return;
+        let read_res = tokio::select! {
+            _ = shutdown.cancelled() => {
+                tracing::info!("shutdown: stop reading new requests");
+                return;
+            }
+            r = reader.read_exact(&mut buf) => r,
+        };
+
+        if read_res.is_err() {
+            tracing::error!("error while reading data from socket for client {:?}", peer);
+            break;
         }
-        p = semaphore.acquire() => p.unwrap(),
-    };
-    // Start processing the client request on a separate, blocking thread
-    // a small note here: we request the work on a separate thread and wait for it to deliver a final result - this is fine for testing right now,
-    // but it's not the end goal: normally, we would want the worker thread to deliver results as they are processed, so that we can start streaming
-    // the result rows back to the client even if the worker is not yet fully done - once we have here enough rows to fill a packet, we can start shipping it via the TCP socket.
-    let env_clone = env.clone();
-    let row = task::spawn_blocking(move || process_query(env_clone, _value))
-        .await
-        .unwrap(); // await here to yield this thread back to the executor, while the query is being processed.
 
-    // drop the semaphore permit - we are done with the worker thread, so others can use it while we stream the results back to the client via the TCP stream
-    drop(permit);
+        let value = u32::from_le_bytes(buf);
+        tracing::info!("Received {} from {:?}", value, peer);
 
-    // Send the result back to the client. For now, we only get a Vec<u8> from the worker thread, for testing purposes only. Normally we would get a result set that would be streamed as it is being processed.
-    if socket.write_all(&row).await.is_err() {
-        tracing::error!("error while writing result")
+        // Acquire an owned permit so it can be moved into the background worker
+        let permit = tokio::select! {
+            _ = shutdown.cancelled() => {
+                tracing::info!("shutdown: refuse starting new query");
+                return;
+            }
+            p = semaphore.clone().acquire_owned() => p.unwrap(),
+        };
+
+        // Clone what the worker needs
+        let tx_clone = tx.clone();
+        let env_clone = env.clone();
+
+        // proposed (reader waits for query to finish before continuing)
+        let row = task::spawn_blocking(move || process_query(env_clone, value))
+            .await
+            .unwrap();
+
+        if tx.send(row).is_err() {
+            tracing::warn!("failed to send row to writer: receiver closed for client");
+        }
+
+        drop(permit);
     }
+
+    // Reader is done (client disconnected or error); drop tx to signal writer to finish
+    drop(tx);
+
+    // Wait for writer task to finish before returning
+    if let Err(e) = writer_handle.await {
+        tracing::warn!("writer task join error: {e}");
+    }
+
+    tracing::info!("client handler exiting for {:?}", peer);
 }
 
 fn process_query(e: Arc<EngineEnvironment>, number: u32) -> Vec<u8> {
@@ -208,7 +253,7 @@ fn process_query(e: Arc<EngineEnvironment>, number: u32) -> Vec<u8> {
 }
 
 /// Sets up the logging for the server
-pub fn init_logging(log_dir: &str) -> Result<WorkerGuard, Box<dyn Error + Send + Sync>> {
+pub fn init_logging(log_dir: &PathBuf) -> Result<WorkerGuard, Box<dyn Error + Send + Sync>> {
     let file_appender = tracing_appender::rolling::daily(log_dir, "trdb.log");
     let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
 

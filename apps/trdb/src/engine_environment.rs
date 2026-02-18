@@ -1,3 +1,4 @@
+use crate::config::EngineConfig;
 use buffer::buffer::BufferManager;
 use file::api::FileManager;
 use file::file_catalog::FileCatalog;
@@ -15,10 +16,16 @@ pub struct EngineEnvironment {
 }
 
 impl EngineEnvironment {
-    pub fn new() -> Self {
+    pub fn new(config: EngineConfig) -> Self {
         let file_catalog = Arc::new(FileCatalog::new());
-        let file_manager = Arc::new(InMemoryFileManager::new("p", file_catalog.clone()));
-        let buffer = Arc::new(BufferManager::new(file_manager.clone(), 100));
+        let file_manager = Arc::new(InMemoryFileManager::new(
+            config.storage.data_dir,
+            file_catalog.clone(),
+        ));
+        let buffer = Arc::new(BufferManager::new(
+            file_manager.clone(),
+            config.storage.buffer_pages.get(),
+        ));
         let storage = Arc::new(StorageManager::new(file_manager.clone(), buffer.clone()));
         Self {
             file_manager,

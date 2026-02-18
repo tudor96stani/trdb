@@ -1,0 +1,4 @@
+[storage]
+data_dir = "./DATA"
+logs_dir = "./LOGS"
+buffer_pages = 100
