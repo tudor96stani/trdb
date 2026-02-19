@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["PageId"]};
+window.SIDEBAR_ITEMS = {"struct":["PageId"],"type":["FileId"]};
