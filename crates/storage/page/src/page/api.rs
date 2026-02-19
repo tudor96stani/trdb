@@ -180,4 +180,17 @@ impl Page {
     pub fn data_mut(&mut self) -> &mut [u8; PAGE_SIZE] {
         &mut self.data
     }
+
+    /// Returns the slot count of the page
+    pub fn slot_count(&self) -> PageResult<u16> {
+        let header = self
+            .header_ref()
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)?;
+
+        header
+            .get_slot_count()
+            .map_err(PageOpError::from)
+            .with_page_id(self.page_id)
+    }
 }

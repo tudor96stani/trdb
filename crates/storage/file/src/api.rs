@@ -22,9 +22,7 @@ pub trait FileManager {
     ///
     /// Return
     /// - `Self`: an instance of the file manager bound to `path`.
-    fn new<P>(path: P, file_catalog: Arc<FileCatalog>) -> Self
-    where
-        P: Into<PathBuf>;
+    fn new(file_catalog: Arc<FileCatalog>) -> Self;
 
     /// Definition
     /// Read the page identified by `page_id` into `destination`.

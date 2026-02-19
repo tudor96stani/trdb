@@ -8,13 +8,23 @@ Originally implemented this database engine in Java as a learning exercise. This
 
 ## Tech Stack
 
-- **Language:** Rust (Edition 2024)
+- **Language:** Rust
 - **Build system:** Cargo
 - **Testing framework:** Built-in Rust test framework and `cargo-nextest`
 - **Documentation:** Rustdoc, hosted on [GitHub Pages](https://tudor96stani.github.io/trdb/)
 - **CI:** GitHub Actions (see `.github/workflows/` for details)
 - **Code Quality:** Clippy, Rustfmt
 - **Code Coverage:** LLVM-cov
+
+## Usage
+There are two binaries:
+- `apps/trdb`: the main server binary
+- `apps/trdbcmd`: a CLI client binary
+
+Configuration for the server can be found in the `trdb.toml` file, where you need to specify the relative path for the data directory (where the database files will be stored, defaults to `./DATA`), log directory (where server logs are stored - **not** write-ahead transactional logging; defaults to `./LOGS`) and the size of the buffer cache in number of pages (1 page = 4KB, defaults to 100).
+
+To start the server, simply execute `cargo run --bin trdb` from the root directory. A single server instance should run, as it binds to a specific port (8080).
+To start a client, execute `cargo run --bin trdbcmd` from the root directory. Multiple client instances can run at the same time. 
 
 ## Roadmap
 The current feature set that needs to be ported over from the Java implementation is as follows:

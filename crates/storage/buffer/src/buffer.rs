@@ -106,6 +106,12 @@ impl<F: FileManager> BufferManager<F> {
         Ok(self.write_guard_from_frame(frame_id))
     }
 
+    /// Writes the page to disk
+    pub fn write_page(&self, page_id: PageId, page_guard: PageWriteGuard<'_>) {
+        self.file_manager
+            .write_page(page_id, page_guard.guard.data())
+    }
+
     /// Shared helper that contains the common logic for loading or returning a page from the buffer.
     /// The `make_guard` closure is responsible for converting a `FrameId` into the requested guard
     /// (either `PageReadGuard` or `PageWriteGuard`).
@@ -299,7 +305,6 @@ mod tests {
     use file::file_catalog::FileCatalog;
     use page::page_id::PageId;
     use page::page_type::PageType;
-    use std::path::PathBuf;
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Barrier, Condvar, Mutex, RwLock};
     use std::{
@@ -313,10 +318,7 @@ mod tests {
     }
 
     impl FileManager for MockFileManager {
-        fn new<P>(_: P, _: Arc<FileCatalog>) -> Self
-        where
-            P: Into<PathBuf>,
-        {
+        fn new(_: Arc<FileCatalog>) -> Self {
             Self {
                 requested_pages: RwLock::new(Vec::new()),
                 sleep_duration: RwLock::new(Duration::from_millis(0)),
@@ -340,7 +342,7 @@ mod tests {
     }
 
     fn create_buffer_manager(of_size: usize) -> BufferManager<MockFileManager> {
-        let fm = Arc::new(MockFileManager::new("", Arc::new(FileCatalog::new())));
+        let fm = Arc::new(MockFileManager::new(Arc::new(FileCatalog::new())));
         BufferManager::new(fm.clone(), of_size)
     }
 
@@ -606,10 +608,7 @@ mod tests {
     fn read_page_file_manager_returns_error_frame_released() {
         struct FailingFileManager;
         impl FileManager for FailingFileManager {
-            fn new<P>(_: P, _: Arc<FileCatalog>) -> Self
-            where
-                P: Into<PathBuf>,
-            {
+            fn new(_: Arc<FileCatalog>) -> Self {
                 Self
             }
 
@@ -622,7 +621,7 @@ mod tests {
         let page_id = PageId::new(1, 1);
 
         let buffer = BufferManager::new(
-            Arc::new(FailingFileManager::new("", Arc::new(FileCatalog::new()))),
+            Arc::new(FailingFileManager::new(Arc::new(FileCatalog::new()))),
             10,
         );
 

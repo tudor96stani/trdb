@@ -1,5 +1,6 @@
 //! A file catalog mapping file IDs to their file names
 
+use page::page_id::FileId;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::RwLock;
@@ -7,7 +8,7 @@ use std::sync::RwLock;
 /// Catalog holding the mappings between a `FileId` (a `u32`) and its corresponding filename (represented as a `PathBuf`)
 #[derive(Debug)]
 pub struct FileCatalog {
-    mappings: RwLock<HashMap<u32, PathBuf>>,
+    mappings: RwLock<HashMap<FileId, PathBuf>>,
 }
 
 impl Default for FileCatalog {
@@ -31,7 +32,7 @@ impl FileCatalog {
     ///
     /// # Returns
     /// `Option<PathBuf>` containing a `PathBuf` for the file name, if the provided `file_id` was registered in the catalog
-    pub(crate) fn get_file_name(&self, file_id: u32) -> Option<PathBuf> {
+    pub(crate) fn get_file_name(&self, file_id: FileId) -> Option<PathBuf> {
         let guard = self
             .mappings
             .read()
@@ -44,7 +45,7 @@ impl FileCatalog {
     /// # Params
     /// - `file_id` (`u32`): the ID of the file to register
     /// - `path` (`PathBuf`): the name of the file to register
-    pub(crate) fn add_file(&self, file_id: u32, path: PathBuf) {
+    pub fn add_file(&self, file_id: FileId, path: PathBuf) {
         let mut guard = self
             .mappings
             .write()

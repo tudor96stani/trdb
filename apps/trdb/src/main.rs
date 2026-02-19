@@ -48,14 +48,27 @@ async fn main() {
 
     let e = Arc::new(EngineEnvironment::new(cfg));
 
+    e.setup_test_data();
+
     // dummy page
-    let page_id = PageId::new(1, 1);
-    {
-        let mut page = e.storage.new_page(page_id);
-        let Ok(()) = page.initialize(page_id, PageType::Unsorted) else {
-            panic!("cannot set page type")
-        };
-    }
+    let page_id = PageId::new(1, 0);
+    match e.storage.read_page(page_id) {
+        Ok(existing_page) => {
+            tracing::info!("Found page with ID {:?}", page_id);
+            let slot_count = existing_page.slot_count().unwrap();
+            tracing::info!("Found {slot_count} rows");
+            for i in 0..slot_count {
+                let r = existing_page.row(i as u32).unwrap();
+                tracing::info!("Row from slot {i}: {:?}", r)
+            }
+        }
+        Err(err) => {
+            tracing::info!("Did not find page with ID {:?}, creating it...", page_id);
+            let mut new_page = e.storage.new_page(page_id).unwrap();
+            new_page.initialize(page_id, PageType::Unsorted).unwrap();
+            e.storage.write_page(page_id, new_page);
+        }
+    };
 
     let semaphore = Arc::new(Semaphore::new(8));
     let shutdown = CancellationToken::new();
@@ -229,7 +242,8 @@ async fn handle_client(
 
 fn process_query(e: Arc<EngineEnvironment>, number: u32) -> Vec<u8> {
     // Read the page with the hardcoded ID
-    let mut page = e.storage.write_page(PageId::new(1, 1));
+    let page_id = PageId::new(1, 0);
+    let mut page = e.storage.read_page_mut(page_id).unwrap();
 
     // Attempt an insert of a 100bytes row
     let Ok(insert_plan) = page.plan_insert(100) else {
@@ -242,6 +256,9 @@ fn process_query(e: Arc<EngineEnvironment>, number: u32) -> Vec<u8> {
         Ok(_) => {}
         Err(e) => panic!("insert failed: {}", e),
     }
+    e.storage.write_page(page_id, page);
+
+    let page = e.storage.read_page(page_id).unwrap();
 
     // Re-read the row to ensure it was inserted
     let Ok(row) = page.row(number - 1) else {

@@ -1,10 +1,13 @@
 use std::fmt;
 
+/// A simple type to define the unique FileId, which is at its core just a u32
+pub type FileId = u32;
+
 /// A unique identifier for any page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PageId {
     /// Unique identifier of the file containing the page.
-    pub file_id: u32,
+    pub file_id: FileId,
 
     /// The specific page number within the file.
     pub page_number: u32,
