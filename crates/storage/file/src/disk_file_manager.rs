@@ -5,7 +5,7 @@ use page::page_id::{FileId, PageId};
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use crate::errors::FileManagerError;
@@ -77,6 +77,8 @@ impl FileManager for DiskFileManager {
 }
 
 impl DiskFileManager {
+    /// Attempt to either retrieve the file handle or open one if not already present in memory
+    /// Returns `Arc<File>` if successful, `FileManagerError` if something goes wrong
     fn get_or_open_file(&self, file_id: FileId) -> Result<Arc<File>, FileManagerError> {
         // First check to see if the file has already been opened - if yes we can return early.
         {
@@ -118,6 +120,8 @@ impl DiskFileManager {
         Ok(file)
     }
 
+    /// OS Specific method to read an array of bytes from a provided offset in the file
+    /// Returns the number of bytes read
     #[inline]
     fn read_at(file: &File, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
         #[cfg(unix)]
@@ -131,6 +135,8 @@ impl DiskFileManager {
         }
     }
 
+    /// OS Specific method to write a byte array at a provided offset in the file
+    /// Returns the number of bytes written
     #[inline]
     fn write_at(file: &File, buf: &[u8], offset: u64) -> std::io::Result<usize> {
         #[cfg(unix)]

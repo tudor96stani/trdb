@@ -1,4 +1,3 @@
-//! Errors for the file crate
 use page::page_id::{FileId, PageId};
 use thiserror::Error;
 

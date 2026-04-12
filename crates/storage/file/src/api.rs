@@ -1,9 +1,6 @@
-//! Public API for the `file` crate
-
 use crate::errors::FileManagerError;
 use crate::file_catalog::FileCatalog;
 use page::page_id::PageId;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// File manager public API
@@ -13,7 +10,6 @@ use std::sync::Arc;
 /// error reporting strategy. The trait itself documents method-level
 /// expectations.
 pub trait FileManager {
-    /// Definition
     /// Create a new file manager instance bound to `path`.
     ///
     /// Params
@@ -25,7 +21,6 @@ pub trait FileManager {
     /// - `Self`: an instance of the file manager bound to `path`.
     fn new(file_catalog: Arc<FileCatalog>) -> Self;
 
-    /// Definition
     /// Read the page identified by `page_id` into `destination`.
     ///
     /// Params
@@ -38,7 +33,6 @@ pub trait FileManager {
     /// - `Err` if anything goes wrong
     fn read_page(&self, page_id: PageId, destination: &mut [u8]) -> Result<(), FileManagerError>;
 
-    /// Definition
     /// Write the contents of `page_data` as the page for `page_id`.
     ///
     /// Params

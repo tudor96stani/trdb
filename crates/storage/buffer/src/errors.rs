@@ -1,5 +1,3 @@
-//! Errors for the buffer module
-
 use file::errors::FileManagerError;
 use thiserror::Error;
 

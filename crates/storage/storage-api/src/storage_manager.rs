@@ -1,11 +1,7 @@
-//! The storage manager
 use buffer::buffer::BufferManager;
 use buffer::errors::BufferError;
 use buffer::guards::{PageReadGuard, PageWriteGuard};
 use file::api::FileManager;
-use file::errors::FileManagerError;
-use file::file_catalog::FileCatalog;
-use page::page::api::Page;
 use page::page_id::PageId;
 use std::sync::Arc;
 use thiserror::Error;
@@ -13,6 +9,8 @@ use thiserror::Error;
 /// The storage manager
 #[derive(Debug)]
 pub struct StorageManager<F: FileManager> {
+    #[expect(unused)]
+    // unused for now, but will be needed in the future, this should give us a warning once the field is actually used
     file_manager: Arc<F>,
     buffer_manager: Arc<BufferManager<F>>,
 }
@@ -26,43 +24,72 @@ impl<F: FileManager> StorageManager<F> {
         }
     }
 
-    /// Obtain a `&Page` via `PageReadGuard` for the provided `PageId`
-    pub fn read_page(&self, page_id: PageId) -> Result<PageReadGuard<'_>, StorageErrors> {
+    /// Obtain a `&Page` via `PageReadGuard` for the provided `PageId`.
+    ///
+    /// # Params
+    /// - `page_id`: the requested `PageId`
+    ///
+    /// # Returns
+    /// - `PageReadGuard` if page is successfully retrieved in memory
+    /// - `StorageError` otherwise
+    pub fn read_page(&self, page_id: PageId) -> Result<PageReadGuard<'_>, StorageError> {
         self.buffer_manager
             .read_page(page_id)
-            .map_err(StorageErrors::ReadPage)
+            .map_err(StorageError::ReadPage)
     }
 
     /// Obtain a `&mut Page` via `PageWriteGuard` for the provided `PageId`
-    pub fn read_page_mut(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, StorageErrors> {
+    ///
+    /// # Params
+    /// - `page_id`: the requested `PageId`
+    ///
+    /// # Returns
+    /// - `PageWriteGuard` if page is successfully retrieved in memory
+    /// - `StorageError` otherwise
+    pub fn read_page_mut(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, StorageError> {
         self.buffer_manager
             .read_page_mut(page_id)
-            .map_err(StorageErrors::ReadPage)
+            .map_err(StorageError::ReadPage)
     }
 
     /// Initialize a new `Page` on the buffer for the provided `PageId` and obtain a `&mut Page`
     /// via a `PageWriteGuard`
-    pub fn new_page(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, StorageErrors> {
+    ///
+    /// # Params
+    /// - `page_id`: the requested `PageId`
+    ///
+    /// # Returns
+    /// - `PageWriteGuard` if page is successfully retrieved in memory
+    /// - `StorageError` otherwise
+    pub fn new_page(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, StorageError> {
         self.buffer_manager
             .allocate_new_page(page_id)
-            .map_err(StorageErrors::NewPage)
+            .map_err(StorageError::NewPage)
     }
 
-    /// Writes a page
+    /// Writes a page to disk
+    ///
+    /// # Params
+    /// - `page_id`: the `PageId` of the page
+    /// - `guard`: the `PageWriteGuard` holding access to the updated page that needs to be written
+    ///
+    /// # Returns
+    /// - `()` if write is successful
+    /// - `StorageError` otherwise
     pub fn write_page(
         &self,
         page_id: PageId,
         guard: PageWriteGuard<'_>,
-    ) -> Result<(), StorageErrors> {
+    ) -> Result<(), StorageError> {
         self.buffer_manager
             .write_page(page_id, guard)
-            .map_err(StorageErrors::WritePage)
+            .map_err(StorageError::WritePage)
     }
 }
 
 /// Public storage API errors
 #[derive(Debug, Error)]
-pub enum StorageErrors {
+pub enum StorageError {
     /// Error while reading page
     #[error("Error while reading page")]
     ReadPage(BufferError),

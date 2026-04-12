@@ -1,5 +1,3 @@
-//! Provides the implementation for the main buffer leveraged by the engine
-
 use crate::errors::BufferError;
 use crate::frame::{BufferFrame, FrameId};
 use crate::guards::{PageReadGuard, PageWriteGuard};
@@ -113,7 +111,15 @@ impl<F: FileManager> BufferManager<F> {
         Ok(self.write_guard_from_frame(frame_id))
     }
 
-    /// Writes the page to disk
+    /// Writes the provided data page to disk
+    ///
+    /// # Params
+    ///  - `page_id`: the ID of the page to write to disk
+    ///  - `page_guard`: a write guard to the buffer frame that holds the updated page
+    ///
+    /// # Returns `Result<(), BufferError>`
+    /// - `()` if the page is successfully written to disk,
+    /// - `BufferError` if something goes wrong
     pub fn write_page(
         &self,
         page_id: PageId,

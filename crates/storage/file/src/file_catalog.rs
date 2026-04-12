@@ -1,5 +1,3 @@
-//! A file catalog mapping file IDs to their file names
-
 use page::page_id::FileId;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -37,6 +35,7 @@ impl FileCatalog {
             .mappings
             .read()
             .expect("FileCatalog poisoned: another thread panicked while holding the lock");
+
         guard.get(&file_id).cloned()
     }
 
@@ -50,6 +49,7 @@ impl FileCatalog {
             .mappings
             .write()
             .expect("FileCatalog poisoned: another thread panicked while holding the lock");
+
         guard.insert(file_id, path);
     }
 }
