@@ -9,3 +9,6 @@ pub mod file_catalog;
 
 /// The actual disk based file manager
 pub mod disk_file_manager;
+
+/// Errors for the File crate
+pub mod errors;

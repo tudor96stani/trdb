@@ -1,7 +1,8 @@
 //! Buffer management module for storage system.
 
 pub mod buffer;
-mod errors;
+
+pub mod errors;
 mod frame;
 
 /// Exposes `guard`-like structs that will provide the access to the `Page` instances

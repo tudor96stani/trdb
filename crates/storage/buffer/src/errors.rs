@@ -1,10 +1,15 @@
-use page::page_id::PageId;
+//! Errors for the buffer module
+
+use file::errors::FileManagerError;
+use thiserror::Error;
 
 /// Buffer error.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum BufferError {
     /// Buffer was full
+    #[error("Buffer full")]
     BufferFull,
-    /// Could not read file from disk
-    IoReadFailed(PageId),
+    /// Error stemming from the File manager
+    #[error("File manager error")]
+    FileManager(#[from] FileManagerError),
 }

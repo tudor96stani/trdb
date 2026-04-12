@@ -8,6 +8,7 @@ use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use crate::errors::FileManagerError;
 #[cfg(unix)]
 use std::os::unix::fs::FileExt;
 #[cfg(windows)]
@@ -28,16 +29,24 @@ impl FileManager for DiskFileManager {
         }
     }
 
-    fn read_page(&self, page_id: PageId, destination: &mut [u8]) -> bool {
-        let file = self.get_or_open_file(page_id.file_id);
+    fn read_page(&self, page_id: PageId, destination: &mut [u8]) -> Result<(), FileManagerError> {
+        let file = self.get_or_open_file(page_id.file_id)?;
 
         let offset = ((page_id.page_number as usize) * (PAGE_SIZE)) as u64;
 
-        matches!(Self::read_at(file.as_ref(), destination, offset), Ok(n) if n == PAGE_SIZE)
+        let bytes_read = Self::read_at(file.as_ref(), destination, offset)?;
+        if bytes_read == PAGE_SIZE {
+            Ok(())
+        } else {
+            Err(FileManagerError::DidNotReadAllBytes {
+                page_id,
+                bytes_read,
+            })
+        }
     }
 
-    fn write_page(&self, page_id: PageId, page_data: &[u8]) {
-        let file = self.get_or_open_file(page_id.file_id);
+    fn write_page(&self, page_id: PageId, page_data: &[u8]) -> Result<(), FileManagerError> {
+        let file = self.get_or_open_file(page_id.file_id)?;
 
         let offset = ((page_id.page_number as usize) * (PAGE_SIZE)) as u64;
 
@@ -47,57 +56,66 @@ impl FileManager for DiskFileManager {
                 file.as_ref(),
                 &page_data[written..],
                 offset + written as u64,
-            )
-            .expect("disk write failed");
+            )?;
 
             if n == 0 {
-                panic!("disk write failed - wrote 0 bytes");
+                return Err(FileManagerError::WroteZeroBytes { page_id });
             }
 
             written += n;
         }
+
+        if written != PAGE_SIZE {
+            return Err(FileManagerError::DidNotWriteAllBytes {
+                page_id,
+                bytes_written: written,
+            });
+        }
+
+        Ok(())
     }
 }
 
 impl DiskFileManager {
-    fn get_or_open_file(&self, file_id: FileId) -> Arc<File> {
-        // 1. Fast path — read lock
+    fn get_or_open_file(&self, file_id: FileId) -> Result<Arc<File>, FileManagerError> {
+        // First check to see if the file has already been opened - if yes we can return early.
         {
             let files = self.files.read().unwrap();
             if let Some(file) = files.get(&file_id) {
-                return Arc::clone(file);
+                return Ok(Arc::clone(file));
             }
         }
 
-        // 2. Slow path — write lock
+        // Since we don't have it yet, we need to first lock the map to insert a new entry for this file
         let mut files = self.files.write().unwrap();
 
-        // 3. Double-check
+        // Double check in case someone got there first
         if let Some(file) = files.get(&file_id) {
-            return Arc::clone(file);
+            return Ok(Arc::clone(file));
         }
 
-        // 4. Actually open file
+        // Find the path to the file
         let path = self
             .file_catalog
             .get_file_name(file_id)
-            .expect("File does not exist");
+            .ok_or(FileManagerError::FilePathNotFound { file_id })?;
 
+        // Create parent directory if needed
         Self::ensure_parent_dir(&path);
 
+        // Open the file
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
-            .open(path)
-            .expect("Failed to open file");
+            .open(path)?;
 
         let file = Arc::new(file);
 
         files.insert(file_id, Arc::clone(&file));
 
-        file
+        Ok(file)
     }
 
     #[inline]
@@ -126,11 +144,21 @@ impl DiskFileManager {
         }
     }
 
-    fn ensure_parent_dir(path: &Path) -> std::io::Result<()> {
+    /// Ensures the data directory storing all the database files exists
+    /// If it does not exist, it creates it.
+    ///
+    /// ## Returns
+    /// - `()` - nothing, as the method will cause a panic if the directory cannot be created.
+    fn ensure_parent_dir(path: &Path) {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("failed to create data directory");
+            // In this case, we want the whole thing to break, since we cannot work
+            // if the parent directory cannot be created. `expect` is valid here
+            fs::create_dir_all(parent).unwrap_or_else(|_| {
+                panic!(
+                    "Failed to create data directory: {:?}. Please check permissions!",
+                    path
+                )
+            });
         }
-
-        Ok(())
     }
 }

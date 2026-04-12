@@ -1,7 +1,9 @@
 //! The storage manager
 use buffer::buffer::BufferManager;
+use buffer::errors::BufferError;
 use buffer::guards::{PageReadGuard, PageWriteGuard};
 use file::api::FileManager;
+use file::errors::FileManagerError;
 use file::file_catalog::FileCatalog;
 use page::page::api::Page;
 use page::page_id::PageId;
@@ -26,32 +28,35 @@ impl<F: FileManager> StorageManager<F> {
 
     /// Obtain a `&Page` via `PageReadGuard` for the provided `PageId`
     pub fn read_page(&self, page_id: PageId) -> Result<PageReadGuard<'_>, StorageErrors> {
-        match self.buffer_manager.read_page(page_id) {
-            Ok(page_read_guard) => Ok(page_read_guard),
-            Err(_) => Err(StorageErrors::ReadPage),
-        }
+        self.buffer_manager
+            .read_page(page_id)
+            .map_err(StorageErrors::ReadPage)
     }
 
     /// Obtain a `&mut Page` via `PageWriteGuard` for the provided `PageId`
     pub fn read_page_mut(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, StorageErrors> {
-        match self.buffer_manager.read_page_mut(page_id) {
-            Ok(page_write_guard) => Ok(page_write_guard),
-            Err(_) => Err(StorageErrors::ReadPage),
-        }
+        self.buffer_manager
+            .read_page_mut(page_id)
+            .map_err(StorageErrors::ReadPage)
     }
 
     /// Initialize a new `Page` on the buffer for the provided `PageId` and obtain a `&mut Page`
     /// via a `PageWriteGuard`
     pub fn new_page(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, StorageErrors> {
-        match self.buffer_manager.allocate_new_page(page_id) {
-            Ok(page_write_guard) => Ok(page_write_guard),
-            Err(_) => Err(StorageErrors::NewPage),
-        }
+        self.buffer_manager
+            .allocate_new_page(page_id)
+            .map_err(StorageErrors::NewPage)
     }
 
     /// Writes a page
-    pub fn write_page(&self, page_id: PageId, guard: PageWriteGuard<'_>) {
-        self.buffer_manager.write_page(page_id, guard)
+    pub fn write_page(
+        &self,
+        page_id: PageId,
+        guard: PageWriteGuard<'_>,
+    ) -> Result<(), StorageErrors> {
+        self.buffer_manager
+            .write_page(page_id, guard)
+            .map_err(StorageErrors::WritePage)
     }
 }
 
@@ -60,8 +65,11 @@ impl<F: FileManager> StorageManager<F> {
 pub enum StorageErrors {
     /// Error while reading page
     #[error("Error while reading page")]
-    ReadPage,
+    ReadPage(BufferError),
     /// Error while creating new page
     #[error("Error while creating new page")]
-    NewPage,
+    NewPage(BufferError),
+    /// Error while writing page
+    #[error("Error while writing page")]
+    WritePage(BufferError),
 }
