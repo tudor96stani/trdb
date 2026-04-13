@@ -1,4 +1,7 @@
 //! Storage API providing access to the storage engine.
-#![allow(unused)] // Silence compiler warnings about unused code until they are referenced in main binary. TODO: remove this
 
+/// Storage manager definition - the access point to the storage engine
 pub mod storage_manager;
+
+/// Public errors exposed by the storage-api crate
+pub mod errors;

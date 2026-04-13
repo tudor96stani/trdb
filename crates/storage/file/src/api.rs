@@ -1,8 +1,6 @@
-//! Public API for the `file` crate
-
+use crate::errors::FileManagerError;
 use crate::file_catalog::FileCatalog;
 use page::page_id::PageId;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// File manager public API
@@ -12,7 +10,6 @@ use std::sync::Arc;
 /// error reporting strategy. The trait itself documents method-level
 /// expectations.
 pub trait FileManager {
-    /// Definition
     /// Create a new file manager instance bound to `path`.
     ///
     /// Params
@@ -24,7 +21,6 @@ pub trait FileManager {
     /// - `Self`: an instance of the file manager bound to `path`.
     fn new(file_catalog: Arc<FileCatalog>) -> Self;
 
-    /// Definition
     /// Read the page identified by `page_id` into `destination`.
     ///
     /// Params
@@ -32,14 +28,11 @@ pub trait FileManager {
     /// - `destination`: Caller-provided buffer to receive the page bytes. The
     ///   buffer length must equal the storage page size.
     ///
-    /// Return
-    /// - `bool`: `true` if the page existed and was copied into
-    ///   `destination`; `false` if the page does not exist. Implementations
-    ///   may decide how to handle buffer-size mismatches (see implementation
-    ///   docs / future error types).
-    fn read_page(&self, page_id: PageId, destination: &mut [u8]) -> bool; //TODO change return type to Result
+    /// Returns a `Result<bool, FileModuleErrors>`.
+    /// - `Ok(())`:if the page existed and was copied into `destination`;
+    /// - `Err` if anything goes wrong
+    fn read_page(&self, page_id: PageId, destination: &mut [u8]) -> Result<(), FileManagerError>;
 
-    /// Definition
     /// Write the contents of `page_data` as the page for `page_id`.
     ///
     /// Params
@@ -47,8 +40,9 @@ pub trait FileManager {
     /// - `page_data`: Byte slice containing exactly one page worth of data. The
     ///   length must equal the storage page size.
     ///
-    /// Return
+    /// Returns `Result<(), FileModuleErrors>`
     /// - `()`: No value is returned. Implementations control how they report
     ///   internal failures; this trait does not expose an error type yet.
-    fn write_page(&self, page_id: PageId, page_data: &[u8]); //TODO change return type to Result
+    /// - `Err` if anything goes wrong
+    fn write_page(&self, page_id: PageId, page_data: &[u8]) -> Result<(), FileManagerError>;
 }

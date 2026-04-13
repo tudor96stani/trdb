@@ -1,5 +1,3 @@
-//! Provides the implementation for the main buffer leveraged by the engine
-
 use crate::errors::BufferError;
 use crate::frame::{BufferFrame, FrameId};
 use crate::guards::{PageReadGuard, PageWriteGuard};
@@ -35,6 +33,8 @@ pub struct BufferManager<F: FileManager> {
     file_manager: Arc<F>,
     page_map: RwLock<HashMap<PageId, Arc<PageEntry>>>,
     frames: Vec<BufferFrame>,
+
+    // A barrier used only during testing, to force certain race conditions
     #[cfg(test)]
     hooks: OnceLock<Arc<Barrier>>,
 }
@@ -45,7 +45,10 @@ impl<F: FileManager> BufferManager<F> {
     /// Sets up internal structures required for managing the pool.
     pub fn new(file_manager: Arc<F>, pool_size: usize) -> Self {
         tracing::info!("Starting up buffer manager with {} frames", pool_size);
+
         let mut frames = Vec::with_capacity(pool_size);
+
+        // Fill in the buffer with empty frames
         for _ in 0..pool_size {
             frames.push(BufferFrame::default());
         }
@@ -88,6 +91,7 @@ impl<F: FileManager> BufferManager<F> {
     /// `PageWriteGuard` instance with write-access to the underlying page.
     pub fn allocate_new_page(&self, page_id: PageId) -> Result<PageWriteGuard<'_>, BufferError> {
         tracing::info!("Allocating new page {} for buffer manager", page_id);
+
         let frame_id = self
             .claim_free_frame(page_id)
             .ok_or(BufferError::BufferFull)?;
@@ -97,6 +101,7 @@ impl<F: FileManager> BufferManager<F> {
             map_guard.insert(
                 page_id,
                 Arc::new(PageEntry {
+                    // Frame is ready as we do not need to read anything from disk
                     state: Mutex::new(PageState::Ready(frame_id)),
                     cond_var: Condvar::new(),
                 }),
@@ -106,10 +111,23 @@ impl<F: FileManager> BufferManager<F> {
         Ok(self.write_guard_from_frame(frame_id))
     }
 
-    /// Writes the page to disk
-    pub fn write_page(&self, page_id: PageId, page_guard: PageWriteGuard<'_>) {
+    /// Writes the provided data page to disk
+    ///
+    /// # Params
+    ///  - `page_id`: the ID of the page to write to disk
+    ///  - `page_guard`: a write guard to the buffer frame that holds the updated page
+    ///
+    /// # Returns `Result<(), BufferError>`
+    /// - `()` if the page is successfully written to disk,
+    /// - `BufferError` if something goes wrong
+    pub fn write_page(
+        &self,
+        page_id: PageId,
+        page_guard: PageWriteGuard<'_>,
+    ) -> Result<(), BufferError> {
         self.file_manager
-            .write_page(page_id, page_guard.guard.data())
+            .write_page(page_id, page_guard.guard.data())?;
+        Ok(())
     }
 
     /// Shared helper that contains the common logic for loading or returning a page from the buffer.
@@ -184,11 +202,11 @@ impl<F: FileManager> BufferManager<F> {
 
             // Ask the file manager to load data from disk directly into the byte array of the page
             // instance from the buffer frame
-            if !self.file_manager.read_page(page_id, page.data_mut()) {
+            if let Err(e) = self.file_manager.read_page(page_id, page.data_mut()) {
                 // rollback claim and remove entry from map.
                 *self.frames[frame_id].page_id.write().unwrap() = None;
                 self.page_map.write().unwrap().remove(&page_id);
-                return Err(BufferError::IoReadFailed(page_id));
+                return Err(BufferError::from(e));
             }
 
             // Also update the page's internal `page_id` field.
@@ -302,6 +320,7 @@ mod tests {
     use crate::errors::BufferError;
     use crate::frame::FrameId;
     use file::api::FileManager;
+    use file::errors::FileManagerError;
     use file::file_catalog::FileCatalog;
     use page::page_id::PageId;
     use page::page_type::PageType;
@@ -325,14 +344,16 @@ mod tests {
             }
         }
 
-        fn read_page(&self, page_id: PageId, _: &mut [u8]) -> bool {
+        fn read_page(&self, page_id: PageId, _: &mut [u8]) -> Result<(), FileManagerError> {
             let duration = self.sleep_duration.read().unwrap();
             thread::sleep(*duration);
             self.requested_pages.write().unwrap().push(page_id);
-            true
+            Ok(())
         }
 
-        fn write_page(&self, _: PageId, _: &[u8]) {}
+        fn write_page(&self, _: PageId, _: &[u8]) -> Result<(), FileManagerError> {
+            Ok(())
+        }
     }
 
     impl MockFileManager {
@@ -612,11 +633,19 @@ mod tests {
                 Self
             }
 
-            fn read_page(&self, _: PageId, _: &mut [u8]) -> bool {
-                false
+            fn read_page(&self, page_id: PageId, _: &mut [u8]) -> Result<(), FileManagerError> {
+                Err(FileManagerError::DidNotReadAllBytes {
+                    page_id,
+                    bytes_read: 0,
+                })
             }
 
-            fn write_page(&self, _: PageId, _: &[u8]) {}
+            fn write_page(&self, page_id: PageId, _: &[u8]) -> Result<(), FileManagerError> {
+                Err(FileManagerError::DidNotWriteAllBytes {
+                    page_id,
+                    bytes_written: 0,
+                })
+            }
         }
         let page_id = PageId::new(1, 1);
 
@@ -626,8 +655,20 @@ mod tests {
         );
 
         let result = buffer.read_page(page_id).unwrap_err();
-
-        assert!(matches!(result, BufferError::IoReadFailed(pageid) if pageid == page_id));
+        // Assert that the error is FileManagerError::DidNotReadAllBytes { page_id, bytes_read: 0 } using pattern matching
+        match result {
+            BufferError::FileManager(FileManagerError::DidNotReadAllBytes {
+                page_id: err_page_id,
+                bytes_read,
+            }) => {
+                assert_eq!(err_page_id, page_id);
+                assert_eq!(bytes_read, 0);
+            }
+            other => panic!(
+                "Expected BufferError::FileManager(FileManagerError::DidNotReadAllBytes), got: {:?}",
+                other
+            ),
+        }
         assert!(
             buffer
                 .frames
