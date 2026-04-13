@@ -168,3 +168,125 @@ impl DiskFileManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use tempfile::tempdir;
+
+    #[test]
+    fn write_and_read_full_page_roundtrip() {
+        // Create temp dir and file
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("data.db");
+
+        let catalog = FileCatalog::new();
+        catalog.add_file(1, file_path.clone());
+
+        let manager = DiskFileManager::new(Arc::new(catalog));
+
+        // Prepare page-sized buffer with a pattern
+        let write_buf = vec![0xABu8; PAGE_SIZE];
+
+        // Write page 0
+        manager
+            .write_page(PageId::new(1, 0), &write_buf)
+            .expect("write_page failed");
+
+        // Read back
+        let mut read_buf = vec![0u8; PAGE_SIZE];
+        manager
+            .read_page(PageId::new(1, 0), &mut read_buf)
+            .expect("read_page failed");
+
+        assert_eq!(read_buf, write_buf);
+    }
+
+    #[test]
+    fn reading_unwritten_page_returns_did_not_read_all_bytes() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("data2.db");
+
+        let catalog = FileCatalog::new();
+        catalog.add_file(2, file_path.clone());
+
+        let manager = DiskFileManager::new(Arc::new(catalog));
+
+        // Attempt to read page 1 (not yet written) - should return DidNotReadAllBytes
+        let mut read_buf = vec![0u8; PAGE_SIZE];
+        let res = manager.read_page(PageId::new(2, 1), &mut read_buf);
+
+        match res {
+            Err(FileManagerError::DidNotReadAllBytes {
+                page_id,
+                bytes_read: _,
+            }) => {
+                assert_eq!(page_id, PageId::new(2, 1));
+            }
+            other => panic!("unexpected result: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn write_short_buffer_returns_wrote_zero_bytes() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("short.db");
+
+        let catalog = FileCatalog::new();
+        catalog.add_file(10, file_path.clone());
+
+        let manager = DiskFileManager::new(Arc::new(catalog));
+
+        // Provide a buffer smaller than PAGE_SIZE - this should eventually trigger WroteZeroBytes
+        let short_buf = vec![0xCDu8; PAGE_SIZE - 16];
+
+        let res = manager.write_page(PageId::new(10, 0), &short_buf);
+
+        match res {
+            Err(FileManagerError::WroteZeroBytes { page_id }) => {
+                assert_eq!(page_id, PageId::new(10, 0));
+            }
+            other => panic!("expected WroteZeroBytes, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn missing_catalog_entry_returns_file_path_not_found() {
+        let catalog = FileCatalog::new();
+        let manager = DiskFileManager::new(Arc::new(catalog));
+
+        let buf = vec![0u8; PAGE_SIZE];
+        let res = manager.write_page(PageId::new(99, 0), &buf);
+
+        match res {
+            Err(FileManagerError::FilePathNotFound { file_id }) => assert_eq!(file_id, 99),
+            other => panic!("expected FilePathNotFound, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn nested_parent_dir_created_and_write_reads_ok() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("a/b/c/nested.db");
+
+        let catalog = FileCatalog::new();
+        catalog.add_file(42, file_path.clone());
+
+        let manager = DiskFileManager::new(Arc::new(catalog));
+
+        let write_buf = vec![0xEEu8; PAGE_SIZE];
+        manager
+            .write_page(PageId::new(42, 3), &write_buf)
+            .expect("write_page failed");
+
+        let mut read_buf = vec![0u8; PAGE_SIZE];
+        manager
+            .read_page(PageId::new(42, 3), &mut read_buf)
+            .expect("read_page failed");
+
+        assert_eq!(read_buf, write_buf);
+        // Ensure the file actually exists on disk
+        assert!(file_path.exists());
+    }
+}
