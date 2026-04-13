@@ -1,10 +1,9 @@
+use crate::errors::StorageError;
 use buffer::buffer::BufferManager;
-use buffer::errors::BufferError;
 use buffer::guards::{PageReadGuard, PageWriteGuard};
 use file::api::FileManager;
 use page::page_id::PageId;
 use std::sync::Arc;
-use thiserror::Error;
 
 /// The storage manager
 #[derive(Debug)]
@@ -85,18 +84,4 @@ impl<F: FileManager> StorageManager<F> {
             .write_page(page_id, guard)
             .map_err(StorageError::WritePage)
     }
-}
-
-/// Public storage API errors
-#[derive(Debug, Error)]
-pub enum StorageError {
-    /// Error while reading page
-    #[error("Error while reading page")]
-    ReadPage(BufferError),
-    /// Error while creating new page
-    #[error("Error while creating new page")]
-    NewPage(BufferError),
-    /// Error while writing page
-    #[error("Error while writing page")]
-    WritePage(BufferError),
 }
