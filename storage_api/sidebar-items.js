@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["storage_manager"]};
+window.SIDEBAR_ITEMS = {"mod":["errors","storage_manager"]};

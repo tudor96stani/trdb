@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["api","disk_file_manager","file_catalog"]};
+window.SIDEBAR_ITEMS = {"mod":["api","disk_file_manager","errors","file_catalog"]};
