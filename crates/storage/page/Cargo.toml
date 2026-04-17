@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 thiserror = { workspace = true }
 paste = { workspace = true }
-binary-helpers = { path = "../binary-helpers" }
+shared = { path = "../../shared" }
 
 [lints]
 workspace = true

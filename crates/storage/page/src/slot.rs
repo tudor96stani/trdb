@@ -1,5 +1,5 @@
 use crate::errors::slot_error::SlotError;
-use binary_helpers::le::{read_le, write_le};
+use shared::binary_helpers::le::{read_le, write_le};
 
 /// Fixed-size of a slot in bytes.
 pub(crate) const SLOT_SIZE: usize = 4;
@@ -135,7 +135,7 @@ impl<'a> SlotMut<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use binary_helpers::bin_error::BinaryError;
+    use shared::binary_helpers::bin_error::BinaryError;
     use std::fmt::Write as _; // for format tests if needed
 
     #[test]

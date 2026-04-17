@@ -1,4 +1,4 @@
-use crate::bin_error::BinaryError;
+use crate::binary_helpers::bin_error::BinaryError;
 
 /// A trait for types that can be serialized and deserialized in little-endian format.
 /// This trait is implemented for integer types like `u16`, `u32`, and `u64`.
@@ -122,8 +122,8 @@ pub fn write_le<T: LittleEndianInteger>(
 
 #[cfg(test)]
 mod write_le_test {
-    use crate::bin_error::BinaryError;
-    use crate::le::write_le;
+    use crate::binary_helpers::bin_error::BinaryError;
+    use crate::binary_helpers::le::write_le;
 
     #[test]
     fn test_write_le_success_u32() {
@@ -176,7 +176,7 @@ mod write_le_test {
 #[cfg(test)]
 mod read_le_tests {
     use super::*;
-    use crate::bin_error::BinaryError;
+    use crate::binary_helpers::bin_error::BinaryError;
 
     #[test]
     fn test_read_le_u16() {
@@ -252,7 +252,7 @@ mod read_le_tests {
 #[cfg(test)]
 mod from_le_tests {
     use super::*;
-    use crate::bin_error::BinaryError;
+    use crate::binary_helpers::bin_error::BinaryError;
 
     #[test]
     fn test_from_le_success_u32() {
@@ -278,7 +278,7 @@ mod from_le_tests {
 #[cfg(test)]
 mod to_le_tests {
     use super::*;
-    use crate::bin_error::BinaryError;
+    use crate::binary_helpers::bin_error::BinaryError;
 
     #[test]
     fn test_to_le_success_u32() {

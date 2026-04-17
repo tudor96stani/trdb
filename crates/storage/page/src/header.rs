@@ -90,8 +90,8 @@ use crate::errors::header_error::HeaderError;
 use crate::page_type::PageType;
 use crate::slot::SLOT_SIZE;
 use crate::{HEADER_SIZE, PAGE_SIZE};
-use binary_helpers::le::{read_le, write_le};
 use paste::paste;
+use shared::binary_helpers::le::{read_le, write_le};
 
 /// The 'HeaderRef' struct provides an immutable view into the header of a page.
 #[derive(Debug)]

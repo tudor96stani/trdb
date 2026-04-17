@@ -2,7 +2,7 @@ use crate::errors::delete_error::DeleteError;
 use crate::errors::header_error::HeaderError;
 use crate::errors::insert_error::InsertError;
 use crate::errors::slot_error::SlotError;
-use binary_helpers::conversions::ConversionError;
+use shared::binary_helpers::conversions::ConversionError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

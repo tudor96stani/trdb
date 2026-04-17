@@ -166,8 +166,8 @@ mod tests_error_helpers {
     use crate::errors::read_row_error::ReadRowError;
     use crate::errors::slot_error::SlotError;
     use crate::errors::update_error::UpdateError;
-    use binary_helpers::bin_error::BinaryError;
-    use binary_helpers::conversions::ConversionError;
+    use shared::binary_helpers::bin_error::BinaryError;
+    use shared::binary_helpers::conversions::ConversionError;
 
     // Macro to generate expect_* helpers
     macro_rules! impl_expect_ref {

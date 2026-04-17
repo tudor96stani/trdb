@@ -3,7 +3,7 @@ use crate::errors::slot_error::SlotError;
 use crate::errors::update_error::UpdateError;
 use crate::insertion_plan::InsertionOffset;
 use crate::page::api::Page;
-use binary_helpers::conversions::UsizeConversion;
+use shared::binary_helpers::conversions::UsizeConversion;
 
 impl Page {
     pub(crate) fn update_internal(

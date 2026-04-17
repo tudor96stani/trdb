@@ -18,7 +18,7 @@ pub(crate) enum SlotError {
     #[error("Attempted to access an invalid slot index: {slot_index}")]
     InvalidSlot { slot_index: usize },
     #[error("Error while interpreting binary data.")]
-    BinaryError(#[from] binary_helpers::bin_error::BinaryError),
+    BinaryError(#[from] shared::binary_helpers::bin_error::BinaryError),
     #[error("Error while reading page header")]
     HeaderError(#[from] HeaderError),
 }

@@ -8,7 +8,12 @@ pub enum BinaryError {
     #[error(
         "Attempt to read {expected} bytes from {from_offset}, but provided slice does not contain the expected range."
     )]
-    BytesSliceSizeMismatch { expected: usize, from_offset: usize },
+    BytesSliceSizeMismatch {
+        /// Expected size of the provided data
+        expected: usize,
+        /// Offset at which read started
+        from_offset: usize,
+    },
     /// Error indicating a failure to convert a slice to an array.
     #[error("Error converting a slice")]
     SliceConversionError(#[from] TryFromSliceError),
@@ -16,5 +21,10 @@ pub enum BinaryError {
     #[error(
         "Error when attempting to write data due to size mismatch: source {src} vs target {target}"
     )]
-    WriteErrorSliceSizeMismatch { src: usize, target: usize },
+    WriteErrorSliceSizeMismatch {
+        /// Size of the source
+        src: usize,
+        /// Size of the target
+        target: usize,
+    },
 }
