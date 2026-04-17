@@ -24,16 +24,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
-name = "buffer"
-version = "0.1.0"
-dependencies = [
- "file",
- "page",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "bytes"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,15 +80,6 @@ name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
-
-[[package]]
-name = "file"
-version = "0.1.0"
-dependencies = [
- "page",
- "tempfile",
- "thiserror",
-]
 
 [[package]]
 name = "foldhash"
@@ -261,15 +242,6 @@ name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
-
-[[package]]
-name = "page"
-version = "0.1.0"
-dependencies = [
- "paste",
- "shared",
- "thiserror",
-]
 
 [[package]]
 name = "parking_lot"
@@ -491,13 +463,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "storage-api"
+name = "storage"
 version = "0.1.0"
 dependencies = [
- "buffer",
- "file",
- "page",
+ "paste",
+ "shared",
+ "tempfile",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -755,11 +728,8 @@ dependencies = [
 name = "trdb"
 version = "0.1.0"
 dependencies = [
- "buffer",
- "file",
- "page",
  "serde",
- "storage-api",
+ "storage",
  "thiserror",
  "tokio",
  "tokio-util",

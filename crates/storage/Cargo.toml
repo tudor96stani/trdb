@@ -1,0 +1,16 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tracing.workspace = true
+thiserror.workspace = true
+shared = {path = "../shared"}
+paste = "1.0.15"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3"
