@@ -1,0 +1,9 @@
+{
+    "name": "trdb-container",
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "features": {
+        "ghcr.io/devcontainers/features/rust:1": {
+          
+        }
+    }
+}
