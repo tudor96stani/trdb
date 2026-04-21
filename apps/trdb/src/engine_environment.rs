@@ -2,11 +2,11 @@ use crate::config::EngineConfig;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use storage::buffer::buffer_manager::BufferManager;
-use storage::file::api::FileManager;
-use storage::file::disk_file_manager::DiskFileManager;
-use storage::file::file_catalog::FileCatalog;
-use storage::storage_manager::StorageManager;
+use storage::BufferManager;
+use storage::FileManager;
+use storage::DiskFileManager;
+use storage::FileCatalog;
+use storage::StorageManager;
 
 /// Owner of the singleton-like instances that are needed for the entire lifetime of the server
 #[derive(Debug)]
