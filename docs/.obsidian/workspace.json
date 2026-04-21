@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "decision log.md",
+                "file": "technical_docs/storage/README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "decision log"
+              "title": "README"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "decision log.md",
+                "file": "technical_docs/storage/README.md",
                 "collapseAll": false,
                 "extraContext": true,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for decision log"
+              "title": "Backlinks for README"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "decision log.md",
+                "file": "technical_docs/storage/README.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from decision log"
+              "title": "Outgoing links from README"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "decision log.md",
+                "file": "technical_docs/storage/README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of decision log"
+              "title": "Outline of README"
             }
           }
         ],
@@ -187,16 +187,18 @@
       "markdown-importer:Open format converter": false
     }
   },
-  "active": "cc22e01d13c41aaf",
+  "active": "2e2321ab4b8c19e4",
   "lastOpenFiles": [
-    "implementation notes.md",
+    "technical_docs/storage/pages/README.md",
+    "README.md",
+    "technical_docs/storage/README.md",
     "decision log.md",
+    "implementation notes.md",
     "technical_docs/storage/file manager in trdb.md",
     "technical_docs",
     "technical_docs/storage/current java vs future trdb storage module.md",
     "technical_docs/storage/buffer manager in trdb.md",
     "technical_docs/storage/buffer cache race conditions.md",
-    "technical_docs/storage/pages/README.md",
     "technical_docs/storage/pages/behavior/insertion - edge cases.md",
     "technical_docs/storage/pages/behavior/insertion - indexes.md",
     "technical_docs/storage/pages/behavior/page compaction.md",
@@ -216,7 +218,6 @@
     "storage/interior mutability of the buffer manager.md",
     "avoid fragmentation during deletion from slotted pages - before.png",
     "storage/pages/behavior/updating rows in slotted pages in trdb.md",
-    "storage/pages/slotted page header.md",
     "attachments/current java vs future trdb storage module 2026-02-14 15.57.27.excalidraw.png",
     "attachments/current java vs future trdb storage module 2026-02-14 15.50.31.excalidraw.png",
     "attachments/current java vs future trdb storage module 2026-02-14 15.45.04.excalidraw.png",
