@@ -3,6 +3,15 @@ created: 2026-04-21
 ---
 **This mostly contains random notes taken during development. Ignore Origin references for each note, mostly used for linking in my main Obsidian vault**
 
+## 260219-1533 file paths
+have to decide where to store in memory the fully resolved paths to the files. Two options:
+- file catalog stores relative paths (e.g. `/db1/table1.tbl`) and file manager stores the base path to the `DATA_DIR`,  then they are combined when opening a file
+- file catalog stores full path, file manager does not store anything
+#### Chosen approach
+I think the best approach for now would be is to keep the file manager dump => it should not know about any path internally, but rather only react by reading/writing when requested
+#### Origin
+- 
+---
 ## 260218-1840 changes to server client implementation
 Initial test implementation had the client close the connection after the first query - changed it so that the client loops as well. Also made quite a lot of changes to the server, the most important being:
 - server now runs in a loop in the `client_handle` method, to be able to read data multiple times from the same socket
