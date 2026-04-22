@@ -8,7 +8,6 @@ mod buffer;
 pub use buffer::buffer_manager::BufferManager;
 // ------------------------------------------------
 
-
 // ----------------- FILE -------------------------
 /// Implementation for the file manager and direct disk access
 mod file;
@@ -20,8 +19,6 @@ pub use file::disk_file_manager::DiskFileManager;
 pub use file::file_catalog::FileCatalog;
 // ------------------------------------------------
 
-
-
 // ----------------- PAGE -------------------------
 /// Implementation of data pages
 mod page;
@@ -32,7 +29,6 @@ pub use crate::page::metadata::page_id::PageId;
 /// `PageType` enum, the type of a page, used to determine how to interpret the data on the page
 pub use crate::page::metadata::page_type::PageType;
 // ------------------------------------------------
-
 
 // ----------------- PAGE -------------------------
 /// Implementation of the storage manager, entry point into this library

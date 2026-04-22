@@ -3,9 +3,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use storage::BufferManager;
-use storage::FileManager;
 use storage::DiskFileManager;
 use storage::FileCatalog;
+use storage::FileManager;
 use storage::StorageManager;
 
 /// Owner of the singleton-like instances that are needed for the entire lifetime of the server
