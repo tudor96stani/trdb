@@ -1,7 +1,7 @@
 ---
 created: 2026-04-21
 ---
-**This mostly contains random notes taken during development**
+**This mostly contains random notes taken during development. Ignore Origin references for each note, mostly used for linking in my main Obsidian vault**
 
 ## 260214-1854 client-server
 As I said in **260214-1852 small reorg of crates**, split the client and the server. Made them communicate via a TCP socket, the client sending the request to the server and getting back a response. Some notes here:
@@ -14,14 +14,23 @@ As I said in **260214-1852 small reorg of crates**, split the client and the ser
 	- client should depend on nothing else (from the engine)
 - long way to go, but so far looking good
 
+### Origin
+- [[26-4]] 260214-1854 p11
+
 ---
 ## 260214-1852 small reorg of crates
 I introduced the `trdbcmd` binary, basically the CLI client - I created the binary crate under `src/apps`. I also moved the main server binary there - it looks ok this way, `/crates` will only contains libraries used by the engine
+
+### Origin
+- [[26-4]] 260214-1852 p11
 
 ---
 ## 260213-2043 async
 Started implementing all of this async + threads part in TRDB, seems to be working? Also created a `trdbcmd` binary for the command line client, and did what was described earlier for the server - it starts a loop in which it awaits connections, handles the async connection asynchronously, waits on a semaphore for an available worker thread, then once available it moves the work there - the worker threads inserts a new row, reads it and returns it, the client handler sends it back over the TCP socket and closes the connection.
 Some more debugging via logs is needed to ensure work is actually scheduled as expected, but I expect it works fine.
+
+### Origin
+- [[26-4]] 260213-2043 p7
 
 ---
 ## 260213-0633 async or threads
@@ -46,6 +55,9 @@ In theory we could do a SQL Server specific thing, where we have this cooperativ
 Did a small test project with this: the server does a `loop {listener.await}` then does `tokio::spawn` to call a `process_connection` async. In there, it reads the data from the stream waits on a semaphore for the number of concurrent workers and once it gains access calls `tokio::spawn_blocking` to run the actual worker operation.
 This leaves the server able to receive as many connections in parallel as possible, but only process a given number of them.
 
+### Origin
+- [[26-4]] 260213-0633 p5
+
 ---
 ## 260205-1813 current flow for buffer manager, reasoning
 The current flow is to have the buffer own the frames that store the pages, then handing out references to them. The refs, protected by a read or write guard, allow callers to interact with the page directly. 
@@ -54,6 +66,9 @@ This means that the caller is responsible for clearing out any possible remainin
 
 Still unsure whether we need to notify the buffer that we are done with the updates to a page. We could just set it as dirty when obtaining a write reference and just assume that the caller has done this on purpose. Maybe for now, until we have the WAL and auto-flushing of dirty pages, we can notify the buffer to write it to disk and 
 clear the dirty flag. 
+
+### Origin
+- [[26-3]] 260205-1813 p21
 
 ---
 ## 260203-1804 notes on storage
@@ -74,3 +89,6 @@ file_catalog: Arc<FileCatalog>
 - maybe use `Environment` instead of `Context`, since context can mean for a request, while this is long lived
 - look into where do we store this env? so that it really is long lived?
 	- for now, just place it in the binary and we will see
+
+### Origin 
+- [[26-3]] 260203-1804 p14
