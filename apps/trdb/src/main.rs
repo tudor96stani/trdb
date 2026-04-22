@@ -13,11 +13,11 @@
 
 use crate::config::EngineConfig;
 use crate::engine_environment::EngineEnvironment;
-use page::page_id::PageId;
-use page::page_type::PageType;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
+use storage::PageId;
+use storage::PageType;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
@@ -32,7 +32,7 @@ use tracing_subscriber::{
 mod config;
 mod engine_environment;
 
-// Temporarily placed a lot of logic in here for creating the TCP server, handling client requests, delegating them to the engine for processing, etc
+// Temporarily placed a lot of logic in here for creating the TCP server, handling client requests, delegating them to the engine for processing, etc.
 // All of this will be stripped into separate crates/modules, but for now it will do.
 #[tokio::main]
 async fn main() {
