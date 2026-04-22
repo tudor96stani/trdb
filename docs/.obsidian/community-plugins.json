@@ -3,5 +3,6 @@
   "obsidian-excalidraw-plugin",
   "templater-obsidian",
   "omnisearch",
-  "dataview"
+  "dataview",
+  "obsidian-git"
 ]

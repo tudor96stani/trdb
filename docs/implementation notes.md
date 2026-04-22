@@ -3,6 +3,55 @@ created: 2026-04-21
 ---
 **This mostly contains random notes taken during development. Ignore Origin references for each note, mostly used for linking in my main Obsidian vault**
 
+## 260218-1840 changes to server client implementation
+Initial test implementation had the client close the connection after the first query - changed it so that the client loops as well. Also made quite a lot of changes to the server, the most important being:
+- server now runs in a loop in the `client_handle` method, to be able to read data multiple times from the same socket
+- separate the read and write channels for the client connection - not fully needed right now, but will help once we are able to stream the result back to the client.
+#### Origin
+- [[26-4]] 260218-1840 p25
+---
+## 260218-1727 tokio select!
+The `select!` macro can be used to run multiple concurrent branches, returning when the first completes and cancelling the remaining ones.
+**Use case:** in the main function, running the server functions that await for connections and start the processing of incoming queries + a branch to wait for a `SIGTERM`. If the program receives a shutdown request, it will enter this branch, complete the future and stop processing new requests. Part of the graceful shutdown flow.
+#### Origin
+- [[26-4]] 260218-1727 p25
+---
+## 260218-1308 testing, cfg and buffer
+Testing race conditions is tricky - I don't think I need to cover all of them in the buffer tests, but at least a few of them.
+### Options considered
+- rewriting the buffer in the tests module (by hiding it behind a trait) with extra hooks and gates
+	- + very granular control
+	- + no pollution of the main implementation
+	- - code duplication
+- using a lib like `loom`
+	- + can cover all (or almost all) scenarios automatically
+	- - kinda tricky to setup, a bit overkill
+### Middleground
+- `use` statement decorated with `#[cfg(test)]`
+- add a field in buffer to hold a `Barrier`, hide it behind `#[cfg(test)]` (field declaration + ctor + setter)
+- add a pause method that is only under `#[cfg(test)]`
+	- an `if wait` on the barrier, hidden behind `#[cfg(test)]`
+	- under non-test env, empty body
+	- method decorated with `inline always`
+	- method called at stopping points
+	- since this is decorated with both cfg test and inline, the compiler should remove it for non-test builds, since the method body itself will be empty for those scenarios
+example of usage:
+```rust
+#[cfg(test)]  
+impl<F: FileManager> BufferManager<F> {    
+    #[inline(always)]  
+    fn test_pause(&self) {  
+        #[cfg(test)]  
+        if let Some(b) = &self.hooks.get() {  
+            b.wait();  
+        }  
+        // non-test: nothing  
+    }   
+}
+```
+#### Origin
+- [[26-4]] 260218-1308 p24
+---
 ## 260214-1854 client-server
 As I said in **260214-1852 small reorg of crates**, split the client and the server. Made them communicate via a TCP socket, the client sending the request to the server and getting back a response. Some notes here:
 - currently client does not send query as there is no query processor
