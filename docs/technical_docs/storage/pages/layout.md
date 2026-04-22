@@ -43,9 +43,11 @@ It is comprised of 4 logical regions, placed in the following order:
 - **Slot array**
     - The region storing the slot array of the data page. Each slot contains a pointer to the row it represents, along with the length of the row. Each valid row in the page has a corresponding slot. Rows are only requested from external callers via their **slot id** - the index of the slot in the array (0 indexed).
     - Grows inwards (right to left): first slot is placed at the very end of the page, subsequent slots are placed at ever decreasing offsets. Slot count value from header is used to determine the entire size of the array, as slot entries have a fixed size (4 bytes). Rightmost entry has index 0, rightmost - 1 has index 1 and so on (so indexing goes right to left as well).
-    - Deletion of rows does not correspond to deletion of slots - as external entities refernce a row via its slot id (index), once a row gets assigned an ID it can never change. Instead, deletion causes slots to become invalidated, but does not shift the array to overwrite them.
+    - Deletion of rows does not correspond to deletion of slots - as external entities reference a row via its slot id (index), once a row gets assigned an ID it can never change (this only applies to heaps). Instead, deletion causes slots to become invalidated, but does not shift the array to overwrite them.
 
 ## Flavors
-There are (or will be) two main types of slotted pages: **heap** and **index**. Structurally, they are the same, 
+There are (or will be) two main types of slotted pages: **heap** and **index**. Structurally, they are the same - the differences lies in the behavior. 
+For both types of pages, actual data row is placed in no particular order - the row's bytes are inserted wherever there is a large enough segment (more details on the insertion algorithms can be found in the `behavior` subfolder).
+However, the difference lies in the way the slot array is managed:
 
 # Implementation
