@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["accessors","ctors","delete","insert","insertion_plan","internal","plan_insert","read_row","update"]};

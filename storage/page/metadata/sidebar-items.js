@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["page_id","page_type"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PageType"],"mod":["buffer","errors","file","page","storage_manager"],"struct":["BufferManager","DiskFileManager","FileCatalog","Page","PageId","StorageManager"],"trait":["FileManager"]};
