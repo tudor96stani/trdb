@@ -3,3 +3,7 @@
 /.idea/*
 /logs/
 /DATA/
+
+# Ignore volatile UI-related state
+docs/.obsidian/workspace.json
+docs/.obsidian/app.json

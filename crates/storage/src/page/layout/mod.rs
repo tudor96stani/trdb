@@ -5,6 +5,7 @@
 //! A typical slotted page has this physical structure (generalized):
 //!
 //! ```text
+//!   ↓ page_start
 //!   ┌───────────────────────────────────────────────────────────────┐
 //!   │ Page Header (contains slot_count, free space ptrs, etc.)      │
 //!   ├───────────────────────────────────────────────────────────────┤
@@ -21,7 +22,7 @@
 //!   │   stored physically right-to-left                             │
 //!   └───────────────────────────────────────────────────────────────┘
 //!
-//!                     ↑ page_start                        page_end ↑
+//!                                                          page_end ↑
 //! ```
 //!
 //! # Why This Design?

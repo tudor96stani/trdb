@@ -1,205 +1,31 @@
 # TRDB
-
 A relational db engine. 
 
-## Status
-
-Originally implemented this database engine in Java as a learning exercise. This Rust version is a rewrite to explore Rust's capabilities and performance benefits, along with an opportunity to refactor and improve the original design.
+## High level
+Originally implemented this database engine in Java as a learning exercise. The Rust version is a rewrite to explore Rust's capabilities and performance benefits, along with an opportunity to refactor and improve the original design.
 
 ## Tech Stack
-
-- **Language:** Rust
-- **Build system:** Cargo
-- **Testing framework:** Built-in Rust test framework and `cargo-nextest`
-- **Documentation:** Rustdoc, hosted on [GitHub Pages](https://tudor96stani.github.io/trdb/)
-- **CI:** GitHub Actions (see `.github/workflows/` for details)
-- **Code Quality:** Clippy, Rustfmt
-- **Code Coverage:** LLVM-cov
+- Standard `Rust` setup
+  - `nextest` can be used for nicer test results, but CI uses `cargo test`
+  - `LLVM-cov` for coverage
+- GitHub Action for CI - mostly used to validate changes by running `clippy`
+  - `clippy` configured to treat all warnings as errors
+  - see [workspace Cargo.toml](Cargo.toml) for all workspace lints
+  - git pre-commit hook to verify changes (`clippy` + format + test)
+  - see `.github/workflows` for details on the pipeline
+- Documentation:
+  - Rustdoc (`cargo doc`), hosted on [GitHub Pages](https://tudor96stani.github.io/trdb/)
+  - `/docs` contains technical docs + implementation notes + decision log + anything else, see [docs index](docs/README.md)
 
 ## Usage
 There are two binaries:
 - `apps/trdb`: the main server binary
 - `apps/trdbcmd`: a CLI client binary
 
-Configuration for the server can be found in the `trdb.toml` file, where you need to specify the relative path for the data directory (where the database files will be stored, defaults to `./DATA`), log directory (where server logs are stored - **not** write-ahead transactional logging; defaults to `./LOGS`) and the size of the buffer cache in number of pages (1 page = 4KB, defaults to 100).
+Configuration for the server can be found in the [trdb.toml](trdb.toml) file, where you need to specify the relative path for the data directory (where the database files will be stored, defaults to `./DATA`), log directory (where server logs are stored - **not** write-ahead transactional logging; defaults to `./LOGS`) and the size of the buffer cache in number of pages (1 page = 4KB, defaults to 100).
 
-To start the server, simply execute `cargo run --bin trdb` from the root directory. A single server instance should run, as it binds to a specific port (8080).
-To start a client, execute `cargo run --bin trdbcmd` from the root directory. Multiple client instances can run at the same time. 
+To start the server, simply execute `cargo run --bin trdb` from the root directory. Run a single server instance.
+To start a client, execute `cargo run --bin trdbcmd` from the root directory. Multiple client instances can run at the same time.
 
 ## Roadmap
-The current feature set that needs to be ported over from the Java implementation is as follows:
-
-- [ ] Storage Engine
-  - [ ] Page-based storage
-    - [x] Fixed and variable length records through the use of slotted pages
-    - [x] Page format with header and data area
-    - [x] Accessors for header (get & set values)
-    - [x] Heap unsorted pages
-    - [ ] Index sorted pages with multi-key support (up to five key fields, either integers or strings)
-  - [ ] B+ Tree indexes
-    - [ ] Support for clustered and unclustered indexes
-    - [ ] Auto-splitting of nodes on inserts
-    - [ ] Support for range and point queries
-    - [ ] Support for deletion and updates (with no rebalancing)
-  - [ ] File management
-    - [ ] Interaction with the file system to create, open, read, write, and delete database files
-    - [ ] Each table and index stored in a separate file
-  - [ ] Table file structure management
-    - [ ] Directory page for heaps
-    - [ ] B+ tree based storage for indexes—both clustered and unclustered
-    - [ ] Table header pages with metadata
-  - [ ] Buffer management
-    - [x] Fixed size buffer pool
-    - [ ] LRU replacement policy
-    - [ ] Dirty page management
-    - [ ] Pinning mechanism
-    - [ ] Auto page flushing
-    - [ ] Deferred writes to disk
-  - [ ] Write ahead logging (WAL)
-    - [ ] Log all operations before applying them to the database pages
-    - [ ] Log buffering
-    - [ ] Deferred log writes until transaction commit
-    - [ ] Independent log file
-- [ ] Query engine
-  - [ ] Binary row representation
-    - [ ] Support for fixed (integer) and variable length (string) fields
-    - [ ] Serialization and deserialization of rows
-    - [ ] Key extraction for indexes
-    - [ ] Index entry representation for B+ tree non-leaf nodes
-  - [ ] Parser for SQL statements
-    - [ ] DDL
-      - [ ] CREATE TABLE
-        - [ ] Heap tables
-        - [ ] Clustered indexes with single column primary key. Automatic clustering when primary key present
-      - [ ] CREATE INDEX
-        - [ ] Unclustered indexes with single or composite column keys (max five)
-        - [ ] Both integer and string key types supported
-        - [ ] Unclustered indexes supported only on clustered tables
-      - [ ] DROP TABLE
-        - [ ] Drop table and all associated indexes
-      - [ ] DROP INDEX
-      - [ ] CONSTRAINTS
-        - [ ] FOREIGN KEY with NO ACTION on delete and update (halt operation if constraint violated)
-    - [ ] DML
-      - [ ] INSERT
-        - [ ] Single or multiple values
-        - [ ] Enforcement of primary key and foreign key constraints
-        - [ ] Insertion into clustered table and associated unclustered indexes
-        - [ ] Current limitation on heaps: around 400 data pages due to single directory page. Not a limitation for clustered tables
-      - [ ] DELETE
-        - [ ] Deletion with optional predicate 
-        - [ ] Deletion from clustered table and associated unclustered indexes
-      - [ ] UPDATE
-        - [ ] Update with optional predicate
-        - [ ] Enforcement of primary key and foreign key constraints
-        - [ ] Update of clustered table and associated unclustered indexes
-      - [ ] SELECT
-        - [ ] Projection of specified columns
-        - [ ] Selection with optional predicate (supports =, <, >, <=, >=, != for integers and strings)
-        - [ ] Support for AND/OR logical operators in predicates
-        - [ ] Support for joins (left, inner)
-        - [ ] Support for aggregate functions (COUNT, SUM, AVG, MIN, MAX) without GROUP BY
-        - [ ] Support for LIKE operator with % wildcard at start or end of string
-        - [ ] Support for subqueries
-    - [ ] Other
-      - [ ] BEGIN TRANSACTION
-      - [ ] COMMIT
-      - [ ] ROLLBACK
-  - [ ] Query execution engine
-    - [ ] Logical plan generator over parser AST
-      - [ ] Produce internal logical representation of queries
-    - [ ] Binder over logical plan
-      - [ ] Resolution of table and column names
-      - [ ] Type checking
-    - [ ] Physical query plan generator over logical plan
-      - [ ] Produce initial unoptimized physical plan
-      - [ ] Volcano-model streaming operators
-      - [ ] Operator chaining
-      - [ ] Translation of logical operators to physical operators:
-        - [ ] Heap scan
-        - [ ] Index scan
-        - [ ] Index seek
-          - [ ] Key lookup
-          - [ ] Range seek (`<`, `>`, `> & <`)
-          - [ ] Residual predicate (if needed)
-        - [ ] Filter
-          - [ ] Single or composite conditions separated by AND/OR
-        - [ ] Projection
-        - [ ] Joins—nested loop
-          - [ ] Left
-          - [ ] Inner
-          - [ ] Left semi (only generated internally for constraint validation)
-        - [ ] Stream aggregator
-          - [ ] Avg, Count, Count Distinct, Max, Min, Sum
-        - [ ] Constant scan
-        - [ ] Assert operator (only generated internally for validation, usually along with a left semi join)
-        - [ ] Heap insert
-        - [ ] Heap delete
-          - [ ] Supports predicates
-        - [ ] Clustered index insert
-        - [ ] Clustered index delete
-          - [ ] Supports sourcing rows to be deleted from an inner subquery
-        - [ ] Clustered index update
-          - [ ] Supports sourcing rows to be updated from an inner subquery
-    - [ ] Query optimizer
-      - [ ] Only static optimizations:
-        - [ ] Filter pushdown optimizer + static index selector optimizer
-          - [ ] Push filters as down as possible
-          - [ ] Transform `Filter + Index Scan` operator pairs into `Index Seeks` if possible
-        - [ ] Join optimizer (flip join order)
-        - [ ] Run all optimizers multiple times 
-      - [ ] Support for extension with a cost based optimizer based on statistics
-    - [ ] Query execution
-      - [ ] Receives a optimized plan and executes it
-      - [ ] Produces one row at a time
-      - [ ] Measures duration of each step (parse, bind, generate plan, optimize, execute)
-      - [ ] Outputs result set & metrics
-    - [ ] Transactions & WAL 
-      - [ ] Steal/no force approach
-      - [ ] Unless specified, run each statement in an auto-commit transaction
-      - [ ] Manually begin and commit/rollback transaction
-      - [ ] Abort and rollback transaction on any exception
-      - [ ] Undo all changes during rollback
-      - [ ] Write-ahead log every operation
-      - [ ] Ensure logs are persisted to disk at commit time
-      - [ ] Persist data pages to disk on app exit
-      - [ ] Uniquely identify each log entry with an LSN
-      - [ ] Store operation type, affected object, and raw data in log entries 
-      - [ ] Stamp each data page with latest LSN
-      - [ ] Single user session at this time
-- [ ] Sys
-  - [ ] Catalog
-    - [ ] Maintain sys tables: `sys_tables`, `sys_indexes`, `sys_schemas`, `sys_constraints`
-    - [ ] Persist sys tables as normal clustered tables
-    - [ ] Allow querying of these tables
-    - [ ] Cache catalog in memory and keep in sync
-    - [ ] Manage table schemas
-  - [ ] Startup
-    - [ ] Load catalog from disk
-    - [ ] Restore transaction & LSN counters
-    - [ ] Create system session
-  - [ ] Scheduled task to flush dirty data pages
-- [ ] Utils
-  - [ ] Interaction via CLI
-    - [ ] `exec "query"` to run a query or statement
-      - [ ] Outputs result set, actual execution plan & duration
-      - [ ] Pass `-d` for debug information:
-        - [ ] Each page read and whether it was a cache hit or not
-        - [ ] Initial (unoptimized) execution plan along with actual execution plan
-        - [ ] Duration for each step of the execution
-        - [ ] Result set
-    - [ ] `explain "query"` to display initial (unoptimized) and actual execution plans
-    - [ ] `dump-log` to print the WAL file
-    - [ ] `mock-data` to generate random fake data for a `users` table:
-      - [ ] `-i 100` to insert 100 rows in a clustered index
-      - [ ] `-h 100` to insert 100 rows in a heap
-      - [ ] Drops table if it already exists
-      - [ ] Arbitrary number of rows can be requested - realistic user data generated with an external package
-- [ ] Others
-  - [ ] Configurable location for data directory
-  - [ ] Integration tests
-    - [ ] Run full scenarios with actual implementation
-    - [ ] Use a separate data directory for the test suite
-    - [ ] Persist files between runs (if needed)
-  - [ ] Targeted tests
-    - [ ] Similar to integration, but mock certain layers where needed
+Current goal is to reach feature parity with the Java implementation. See [roadmap](docs/roadmap.md) for a list of what is completed & what still needs to be done
