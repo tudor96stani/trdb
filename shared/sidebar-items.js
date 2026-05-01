@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["binary_helpers"]};
+window.SIDEBAR_ITEMS = {"mod":["binary_helpers","schemas"]};
