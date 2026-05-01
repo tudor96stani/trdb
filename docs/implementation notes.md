@@ -3,10 +3,16 @@ created: 2026-04-21
 ---
 **This mostly contains random notes taken during development. Ignore Origin references for each note, mostly used for linking in my main Obsidian vault**
 
+## 260501-1304 schema builder
+for the `Schema` struct (and inner field structs), instead of exposing the constructors directly, I created a `SchemaBuilder` which allows you to create the `Schema` one field at a time, without the need to provide the data as the actual structs, but as raw values instead (column name as string, etc.). 
+
+#### Origin
+- [[26-4]] 260501-1304 p223
+
 ## 260428-1720 schemas
 The goal behind a schema struct is to easily offer a way of defining the list of columns, along with their types and any other relevant metadata.
 One of the more important aspects: how do we handle object IDs? In Java, we used integers for every globally counted object (like tables and indexes), but strings for every internally counted object (column): table `users` had (global) `table_id = 5`, but the first column (called `userid`) had `column_id = "users_0"`.
-This was done mostly so that, when we do a join on several tables, in the select list we can easily determine which column is which based on the ID alone (if we had used only locally identifiable numbers, e.g. 0, 1, 2, etc, without prefixing it with the table name, doing `select u.id, p.id from users u inner join posts p on u.id = p.id` would have resulted in columns `u.id (column_id = 0) and p.id (column_id = 0)` being selected -> both selected columns would have had the same ID, since they are not globally unique).
+This was done mostly so that, when we do a join on several tables, in the select list we can easily determine which column is which based on the ID alone (if we had used only locally identifiable numbers, e.g. 0, 1, 2, etc., without prefixing it with the table name, doing `select u.id, p.id from users u inner join posts p on u.id = p.id` would have resulted in columns `u.id (column_id = 0) and p.id (column_id = 0)` being selected -> both selected columns would have had the same ID, since they are not globally unique).
 Therefore, we chose to prefix the `column_id` with a unique identifier of the table, to ensure that the second part (the actual column ID, which is realistically just the index of the column in the column list) is unique globally as well. We chose table name instead of table id was done mostly cause it made viewing the raw schema (e.g. in the sys tables/execution plans) easier than by using only numerical IDs
 
 **Proposal for TRDB**
@@ -50,7 +56,7 @@ Testing race conditions is tricky - I don't think I need to cover all of them in
 - using a lib like `loom`
 	- + can cover all (or almost all) scenarios automatically
 	- - kinda tricky to setup, a bit overkill
-### Middleground
+### Middle ground
 - `use` statement decorated with `#[cfg(test)]`
 - add a field in buffer to hold a `Barrier`, hide it behind `#[cfg(test)]` (field declaration + ctor + setter)
 - add a pause method that is only under `#[cfg(test)]`

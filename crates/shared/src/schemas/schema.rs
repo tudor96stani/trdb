@@ -66,7 +66,7 @@ pub struct SchemaEntry {
 
 impl SchemaEntry {
     /// Constructor
-    pub fn new(
+    fn new(
         id: SchemaEntryId,
         name: String,
         data_type: DataType,
@@ -119,7 +119,7 @@ pub struct SchemaEntryId {
 
 impl SchemaEntryId {
     /// Constructor
-    pub fn new(owner_id: ObjectId, column_id: ObjectId) -> Self {
+    fn new(owner_id: ObjectId, column_id: ObjectId) -> Self {
         Self {
             owner_id,
             column_id,
