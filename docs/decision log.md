@@ -3,6 +3,13 @@ created: 2026-04-21
 ---
 **A log of various technical decisions made during development. Context either points to the note in [implementation notes](implementation%20notes.md) on which the decision was based (and where the full context is provided), or describes it in-place**
 
+## 260428-1720 schemas & ids
+**Decision** Uniquely identify a column by using the `table_id + column_id` (or `index_id`) pairing, instead of the `table_name + column_id` used previously in Java. This should reduce the overall footprint of the identifier (though will add complexity for printing/displaying execution plans, as we will need to retrieve the object names as well).
+#### Context
+[260428-1720 schemas](implementation%20notes.md#260428-1720%20schemas)
+
+---
+
 ## 260417-0640 Reorganize storage crates into a single one
 **Decision**: Simplify architecture by doing a single crate/component for **now**. Aggregate existing crates under `crates/storage` (into a single one) and remove unnecessary structs, enums, error types, etc. 
 #### Context
