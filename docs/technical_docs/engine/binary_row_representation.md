@@ -50,9 +50,100 @@ This section stores the actual string values. Similarly to the fixed sized ones,
 ## Example
 The best way to illustrate this is with an example.
 
+Given the schema:
+
+```text
+id    int
+name  string
+age   int
+email string
+```
+
+and the row:
+
+```text
+{ id = 1, name = 'Mary', age = 25, email = 'mary@mail.com' }
+```
+
+the row contains:
+
+- 2 fixed sized integer columns: `id`, `age`
+- 2 variable length string columns: `name`, `email`
+- no NULL values
+
+The row layout looks like this in human-readable form. To see the exact bytes written on disk, see [Actual binary representation](#actual-binary-representation).
+
+```text
+| header   | fixed_size_columns | null_bitmap | var_len_column_offsets | var_len_data_blob       |
+| 43  2  2 | 1  25              | 0           | 4  17                  | 'Mary''mary@mail.com'   |
+```
+
+The sections are:
+
+```text
+Header:
+43 = total size of the entire row, in bytes
+2  = number of fixed sized columns
+2  = number of variable length columns
+
+Fixed sized columns:
+1  = id
+25 = age
+
+NULL bitmap:
+0 = no bits set, so no column is NULL
+
+Variable length column offsets:
+4  = name ends at byte offset 4 within the variable length data blob
+17 = email ends at byte offset 17 within the variable length data blob
+
+Variable length data blob:
+'Mary''mary@mail.com' = the two string values stored contiguously, with no separators
+                       'Mary' is 4 bytes
+                       'mary@mail.com' is 13 bytes
+```
+
+The total row size is `43` bytes: `6` bytes for the header, `8` bytes for the two integers, `8` bytes for the NULL bitmap, `4` bytes for the two variable length column offsets, and `17` bytes for the variable length data blob.
 
 ## Reasoning
 - null bitmap: we chose a bigint for simplicity. max 64 columns. for fewer columns, we waste some bits, but it is what it is. could have gone with var-sized bitmap (based on number of columns), but meh.
 
 ## References
 - [Delaney, K., Beauchemin, B., Cunningham, C., Kehayias, J., Freeman, C., Nevarez, B., & Randal, P. S. (2013). _Microsoft SQL Server 2012 Internals_](https://www.microsoftpressstore.com/store/microsoft-sql-server-2012-internals-9780735658561)
+
+## Actual binary representation
+All numeric values are written in little-endian byte order. All strings are written as UTF-8 bytes.
+
+For the same row:
+
+```text
+Header:
+2B 00 = 43 total bytes
+02 00 = 2 fixed sized columns
+02 00 = 2 variable length columns
+
+Fixed sized columns:
+01 00 00 00 = id = 1
+19 00 00 00 = age = 25
+
+NULL bitmap:
+00 00 00 00 00 00 00 00 = no bits set, so no column is NULL
+
+Variable length column offsets:
+04 00 = name ends at byte offset 4 within the variable length data blob
+11 00 = email ends at byte offset 17 within the variable length data blob
+
+Variable length data blob:
+4D 61 72 79                                  = "Mary"
+6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D      = "mary@mail.com"
+```
+
+Flattened as a contiguous byte array:
+
+```text
+2B 00 02 00 02 00
+01 00 00 00 19 00 00 00
+00 00 00 00 00 00 00 00
+04 00 11 00
+4D 61 72 79 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D
+```

@@ -106,6 +106,14 @@ impl SchemaEntry {
     pub fn is_pk(&self) -> bool {
         self.is_pk
     }
+
+    /// Returns a boolean indicating whether the schema entry (column) is fixed sized or not.
+    pub fn is_fixed_size(&self) -> bool {
+        match self.data_type {
+            DataType::Int => true,
+            DataType::String => false,
+        }
+    }
 }
 
 /// Represents the unique identifier of a column within a `SchemaEntry`.
