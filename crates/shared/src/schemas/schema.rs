@@ -47,6 +47,13 @@ impl Schema {
     pub fn primary_keys(&self) -> &[SchemaEntryId] {
         &self.primary_keys
     }
+
+    /// Returns the sorted columns
+    pub fn columns_sorted(&self) -> impl Iterator<Item = &SchemaEntry> {
+        let mut values: Vec<_> = self.columns.values().collect();
+        values.sort_by_key(|b| b.position());
+        values.into_iter()
+    }
 }
 
 /// A single entry in the `Schema` container

@@ -53,13 +53,18 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
     fill_in_fixed_sized_columns(&mut vec, row, schema)?;
 
     // Populate null bitmap
-
+    //fill_in_null_bitmap(&mut vec, row, schema)?;
     // Populate var len offsets array
 
     // Populate string blob
 
     Ok(vec)
 }
+
+// fn fill_in_null_bitmap(vec: &[u8], row: &Row, schema: &Schema) -> Result<(), RowInterpreterError> {
+//     //for entry in schema.c
+//     Ok(())
+// }
 
 fn fill_in_fixed_sized_columns(
     vec: &mut [u8],

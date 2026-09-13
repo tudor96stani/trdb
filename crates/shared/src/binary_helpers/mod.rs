@@ -6,3 +6,6 @@ pub mod conversions;
 
 /// Exposes helpers for working with raw binary data stored in little-endian format
 pub mod le;
+
+/// Provides implementation for a bitmap (bitflags)
+pub mod bitmap;
