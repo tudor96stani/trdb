@@ -18,7 +18,7 @@ Instead of keeping the `Pages` directly in the buffer, allocate a set of frames 
 The buffer will allocate space for all the frames on the heap. Each page is loaded into the frame. The frame contains a lock on the page, allowing for granular control. This set of frames can be stored as a `Vec`, but each frame is an individual instance pre-allocated on the heap.
 
 Additionally, a separate `Map` will store the mapping `PageID=>FrameID`, where `type FrameID = usize` is just the index of the frame in the vector. Because the frames vector is pre-allocated, we never mutate it, we just change the content of the frames.
-![buffer manager in trdb 2026-02-14 16.56.52.excalidraw](buffer%20manager%20in%20trdb%202026-02-14%2016.56.52.excalidraw.png)
+![buffer manager](../../attachments/buffer%20manager%20in%20trdb%202026-02-14%2016.56.52.excalidraw.png)
 
 ## What this achieves (I hope)
 - buffer is the owner of the in memory pages

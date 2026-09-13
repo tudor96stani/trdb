@@ -9,6 +9,7 @@ for the `Schema` struct (and inner field structs), instead of exposing the const
 #### Origin
 - [[26-4]] 260501-1304 p223
 
+---
 ## 260428-1720 schemas
 The goal behind a schema struct is to easily offer a way of defining the list of columns, along with their types and any other relevant metadata.
 One of the more important aspects: how do we handle object IDs? In Java, we used integers for every globally counted object (like tables and indexes), but strings for every internally counted object (column): table `users` had (global) `table_id = 5`, but the first column (called `userid`) had `column_id = "users_0"`.
@@ -21,8 +22,7 @@ Create a `ColumnId` struct containing `OwnerId: int, ObjectId: int` and combine 
 Also define an `ObjectId` type that maps to a `u16` for now, to standardize the same data type for all IDs.
 => a ColumnId will be 4 bytes
 Also considered creating a `SchemaEntryMetadata` struct to group all schema entry related metadata (is primary key, position), but for now it seems to make little sense, so we'll keep the same choice as in the Java version (keep these flags in the `SchemaEntry` struct).
-#### Origin
-- 
+
 ---
 ## 260219-1533 file paths
 have to decide where to store in memory the fully resolved paths to the files. Two options:
@@ -30,8 +30,7 @@ have to decide where to store in memory the fully resolved paths to the files. T
 - file catalog stores full path, file manager does not store anything
 #### Chosen approach
 I think the best approach for now would be is to keep the file manager dump => it should not know about any path internally, but rather only react by reading/writing when requested
-#### Origin
-- 
+
 ---
 ## 260218-1840 changes to server client implementation
 Initial test implementation had the client close the connection after the first query - changed it so that the client loops as well. Also made quite a lot of changes to the server, the most important being:
@@ -39,12 +38,14 @@ Initial test implementation had the client close the connection after the first 
 - separate the read and write channels for the client connection - not fully needed right now, but will help once we are able to stream the result back to the client.
 #### Origin
 - [[26-4]] 260218-1840 p25
+
 ---
 ## 260218-1727 tokio select!
 The `select!` macro can be used to run multiple concurrent branches, returning when the first completes and cancelling the remaining ones.
 **Use case:** in the main function, running the server functions that await for connections and start the processing of incoming queries + a branch to wait for a `SIGTERM`. If the program receives a shutdown request, it will enter this branch, complete the future and stop processing new requests. Part of the graceful shutdown flow.
 #### Origin
 - [[26-4]] 260218-1727 p25
+
 ---
 ## 260218-1308 testing, cfg and buffer
 Testing race conditions is tricky - I don't think I need to cover all of them in the buffer tests, but at least a few of them.
@@ -81,6 +82,7 @@ impl<F: FileManager> BufferManager<F> {
 ```
 #### Origin
 - [[26-4]] 260218-1308 p24
+
 ---
 ## 260214-1854 client-server
 As I said in **260214-1852 small reorg of crates**, split the client and the server. Made them communicate via a TCP socket, the client sending the request to the server and getting back a response. Some notes here:
