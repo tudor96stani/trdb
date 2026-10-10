@@ -2,148 +2,121 @@
 created: 2026-05-19
 ---
 
-## High level
-This document describes the protocol for the binary representation of records based on the schema of the table they belong to.
-It goes over the actual format, provides the reasoning for it and shows a few examples.
+Encoding turns an in-memory row's cells into bytes that a page can store. The binary row format groups fixed-size integers and variable-size strings so we can locate a column without scanning every value before it. Each integer occupies four bytes; a string's size depends on its UTF-8 contents.
 
-Overall, the format is inspired by multiple existing RDBMS implementations, most heavily influenced by SQL Server - see (Delaney et al., 2013, p. 257-270). It follows the philosophy of separating the columns and storing them grouped by their data type. 
-
-The overall goal is to allow the storage and random access retrieval of both fixed sized (integer) and variable length (string) columns.
-
-**Note:** LOBs and rows that would not fit within a single page are outside the scope of this implementation.
-This means that the largest record size allowed is one that would fit completely in an empty page:
-`PAGE_SIZE - HEADER_SIZE - 1 * SLOT_SIZE = 4096 - 96 - 4 = 3996 bytes max`.
-This will be enforced via max number of columns & max length for string columns. LOBs and `nvarchar(max)`-style features will be considered for future improvements.
+A page stores the encoded row as one contiguous byte range. The row header describes that range, while the schema supplies column names, types and order. Offsets in the format count bytes; they are not memory addresses.
 
 ## Layout
-A record is stored on disk in a data page as a contiguous array of bytes tightly packed together - all the data necessary to decode the row is found in that array.
 
-As with most other formats, it contains a header section and a data section:
+Numeric fields use little-endian encoding. String lengths and offsets count UTF-8 bytes, not characters.
+
 ```text
-| header | fixed_size_columns | null_bitmap | var_len_column_offsets | var_len_data_blob |
- 6 bytes   4 * number of int     8 bytes        2 * number of string   sum(len(str_cols))
-             columns bytes                        columns bytes              bytes
+| header | integers | NULL bitmap | string end offsets | string bytes |
+ 6 bytes   4 * I      8 bytes       2 * S               B bytes
 ```
 
-### Header
-The 6 byte header contains 3 small integers (`short`):
-- total size of entire row, in bytes
-- number of fixed sized (integer) columns
-- number of variable length (string) columns
+`I` is the number of integer columns, `S` the number of string columns and `B` the total string byte length. The row size is `6 + 4 * I + 8 + 2 * S + B`.
 
-### Fixed sized section
-Right after the header we have the fixed sized column section. In here, each integer is placed in a contiguous array, with no separators or markers. The columns are placed in the order in which they are defined in the schema. Because we only support integers, offset computation is trivial: each column is 4 bytes long, and we know from the header the total number of integer columns. 
+### Header
+
+The header contains three `u16` values:
+
+- Total row size at byte offset 0.
+- Integer column count at byte offset 2.
+- String column count at byte offset 4.
+
+### Integers
+
+Starting at byte 6, we store each integer as an `i32`, ordered by its position in the schema. Integer `j` starts at row-relative offset `6 + 4 * j`. A NULL integer still occupies four bytes, filled with zero; the bitmap distinguishes it from integer zero.
 
 ### NULL bitmap
-This is an 8 byte chunk (big int) representing a bitmap of all the null values within the row. This allows for a maximum of 64 columns to be tracked.
-The bitmap itself is relatively straightforward: each column has a corresponding bit at the index that corresponds with its position within the schema - so the first column is tracked by bit with `index = 0`, 2nd column by bit with `index = 1` and so on. 
-The bit is set if the value of that column is NULL and the row decoder consults the bitmap before interpreting the value of a column.
 
-### Variable length column offset section
-This section contains one 2-byte (short) entry for each string column in the schema. Namely, it stores the end offset of the corresponding string column relative to the start of the variable length data blob section start offset. Similarly to the fixed sized section, the string columns are placed in the order defined in the schema. 
-Since we know the total number of string columns, we can compute the exact placement of this array and perform random access on it (because every entry in the array is fixed sized at 2 bytes). Once we have retrieved the information for the string column we are interested in, we can also compute the exact position of the data itself: the `array[index]` provides us with the end offset of the column, while `array[index-1]` will give us the end offset of the previous column - which is the start offset of the column we are interested in. 
-This allows us to do random access to the variable length columns as well, with only some offset computation required. No sequential scan of the entire array is needed.
+The bitmap occupies eight bytes after the integers. In the intended format, bit 0 describes the first column, bit 1 the second, and so on. A set bit means NULL.
 
-### Variable length data blob
-This section stores the actual string values. Similarly to the fixed sized ones, they are stored contiguously, in the order defined in the schema, with no separators between them. The previous section gives us the necessary information to be able to decode and randomly access entries in this section.
+We use a fixed `u64` to keep the layout simple. It can track at most 64 columns, and unused bits remain zero.
+
+### String offsets and data
+
+After the bitmap, we keep one `u16` end offset for each string column, in schema position order. Each offset is relative to the beginning of the string-data section, not to the row or page.
+
+To locate string `j`, we use its end offset and the previous string's end offset. The first string starts at zero. Strings are stored back-to-back as UTF-8, without separators. NULL and empty strings both add zero bytes to the data section; the bitmap tells them apart.
+
+For example, end offsets `[4, 17]` mean the first string uses blob bytes `0..4` and the second uses `4..17`. We only need these two offsets to find the second string.
+
+## Encoding
+
+`to_binary(row, schema)` runs these steps:
+
+1. We compute the byte count from the supplied cells. Each cell's ID must occur in the schema. Column counts come from the schema.
+2. We allocate a zeroed vector of that size.
+3. We convert the size and counts to `u16` and write the header. An overflow returns a conversion error.
+4. We sort integer columns by schema position and write their values, using zero for NULL.
+5. We walk all schema columns in sorted order, build the NULL bitmap and write its eight bytes.
+6. We return the vector. String offsets and data stay zeroed for now.
+
+### Schema checks
+
+The size calculation requires every supplied cell ID to occur in the schema. Integer encoding requires the integer cells and accepts `Int` or `NULL`; the bitmap pass looks up each schema column's cell. Missing entries return the corresponding row-interpreter error. The row is supplied with explicit cells, including explicit NULL values.
+
+### Page-size limit
+
+The format keeps a whole row on one page. The space budget before placement is `4096 - 96 - 4 = 3996`: page size minus page header and one slot. The page planner determines whether a row can be placed using the available space.
+
+Large objects (LOBs) are values stored separately from the row's inline bytes. LOBs and rows spanning pages are not supported.
 
 ## Example
-The best way to illustrate this is with an example.
 
-Given the schema:
+For this schema and row:
 
 ```text
 id    int
 name  string
 age   int
 email string
+
+{ id = 1, name = "Mary", age = 25, email = "mary@mail.com" }
 ```
 
-and the row:
+We have two integers, two strings and no NULLs. `Mary` uses four bytes and `mary@mail.com` uses thirteen, so the complete row would use `6 + 8 + 8 + 4 + 17 = 43` bytes.
 
 ```text
-{ id = 1, name = 'Mary', age = 25, email = 'mary@mail.com' }
+row-relative range   contents
+0..6                 header: 43, 2, 2
+6..14                integers: 1, 25
+14..22               bitmap: 0
+22..26               string end offsets: 4, 17
+26..43               blob: "Mary" followed by "mary@mail.com"
 ```
 
-the row contains:
+### Complete bytes
 
-- 2 fixed sized integer columns: `id`, `age`
-- 2 variable length string columns: `name`, `email`
-- no NULL values
-
-The row layout looks like this in human-readable form. To see the exact bytes written on disk, see [Actual binary representation](#actual-binary-representation).
+The intended encoding is:
 
 ```text
-| header   | fixed_size_columns | null_bitmap | var_len_column_offsets | var_len_data_blob       |
-| 43  2  2 | 1  25              | 0           | 4  17                  | 'Mary''mary@mail.com'   |
+2B 00 02 00 02 00                         header
+01 00 00 00 19 00 00 00                   integers
+00 00 00 00 00 00 00 00                   bitmap
+04 00 11 00                               string end offsets
+4D 61 72 79                               "Mary"
+6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D    "mary@mail.com"
 ```
 
-The sections are:
+This example describes the complete format. String-offset and string-data encoding are not yet implemented.
 
-```text
-Header:
-43 = total size of the entire row, in bytes
-2  = number of fixed sized columns
-2  = number of variable length columns
+### NULL and empty string
 
-Fixed sized columns:
-1  = id
-25 = age
+With `{ id = 1, name = NULL, age = 25, email = "" }`, the complete row would use `6 + 8 + 8 + 4 = 26` bytes. Both string end offsets are zero and there is no blob. In this format, bit 1 marks `name` as NULL, distinguishing it from the non-NULL empty `email`.
 
-NULL bitmap:
-0 = no bits set, so no column is NULL
+### UTF-8
 
-Variable length column offsets:
-4  = name ends at byte offset 4 within the variable length data blob
-17 = email ends at byte offset 17 within the variable length data blob
+With `{ id = 1, name = "é", age = 25, email = "" }`, the complete row would use 28 bytes. The string end offsets would be `[2, 2]` and the blob would be `C3 A9`. `String::len()` counts these two UTF-8 bytes when computing the allocation.
 
-Variable length data blob:
-'Mary''mary@mail.com' = the two string values stored contiguously, with no separators
-                       'Mary' is 4 bytes
-                       'mary@mail.com' is 13 bytes
-```
+## See also
 
-The total row size is `43` bytes: `6` bytes for the header, `8` bytes for the two integers, `8` bytes for the NULL bitmap, `4` bytes for the two variable length column offsets, and `17` bytes for the variable length data blob.
-
-## Reasoning
-- null bitmap: we chose a bigint for simplicity. max 64 columns. for fewer columns, we waste some bits, but it is what it is. could have gone with var-sized bitmap (based on number of columns), but meh.
+- [Schemas](../shared/schemas/schemas.md)
+- [Rows](../shared/schemas/rows.md)
+- [Page layout](../storage/page/layout.md)
 
 ## References
-- [Delaney, K., Beauchemin, B., Cunningham, C., Kehayias, J., Freeman, C., Nevarez, B., & Randal, P. S. (2013). _Microsoft SQL Server 2012 Internals_](https://www.microsoftpressstore.com/store/microsoft-sql-server-2012-internals-9780735658561)
 
-## Actual binary representation
-All numeric values are written in little-endian byte order. All strings are written as UTF-8 bytes.
-
-For the same row:
-
-```text
-Header:
-2B 00 = 43 total bytes
-02 00 = 2 fixed sized columns
-02 00 = 2 variable length columns
-
-Fixed sized columns:
-01 00 00 00 = id = 1
-19 00 00 00 = age = 25
-
-NULL bitmap:
-00 00 00 00 00 00 00 00 = no bits set, so no column is NULL
-
-Variable length column offsets:
-04 00 = name ends at byte offset 4 within the variable length data blob
-11 00 = email ends at byte offset 17 within the variable length data blob
-
-Variable length data blob:
-4D 61 72 79                                  = "Mary"
-6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D      = "mary@mail.com"
-```
-
-Flattened as a contiguous byte array:
-
-```text
-2B 00 02 00 02 00
-01 00 00 00 19 00 00 00
-00 00 00 00 00 00 00 00
-04 00 11 00
-4D 61 72 79 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D
-```
+The layout is mainly inspired by the row format described in [Microsoft SQL Server 2012 Internals, pp. 257–270](https://www.microsoftpressstore.com/store/microsoft-sql-server-2012-internals-9780735658561).

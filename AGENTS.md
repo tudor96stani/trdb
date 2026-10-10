@@ -7,6 +7,8 @@ These instructions apply when writing or editing technical documentation under `
 - Work only under `docs/technical_docs/` for documentation tasks unless the prompt explicitly requests changes elsewhere.
 - Never edit, append to, rewrite or otherwise update `docs/decision log.md` or `docs/implementation notes.md` unless specifically asked to update that file in the prompt. A general request to document an implementation or explain a decision does not authorize updating either file.
 - Use technical documentation to describe behavior, formats, constraints and relevant reasoning. Do not automatically add decision log entries or implementation notes as part of this work.
+- Document how the component behaves, how it is implemented and why it is designed that way. Technical docs are not a code review or bug backlog: do not include implementation faults, missing checks, broken edge cases, correctness warnings or lists of shortcomings. Bugs belong in a task tracking tool, not in these documents. Do not investigate the code for new issues as part of a documentation review unless explicitly asked.
+- Keep normal API errors, supported scope and caller responsibilities when they explain how to use the component. State them as behavior or contracts, without turning them into criticism of the implementation. Keep unfinished features clearly marked rather than describing them as working.
 
 ## Voice and phrasing
 
@@ -17,24 +19,24 @@ These instructions apply when writing or editing technical documentation under `
 - Explain consequences with natural transitions such as "this means that", "because", "so", "however", "instead" and "for now". Parenthetical clarifications and short asides are fine when they help.
 - Keep uncertainty explicit. Use "I think", "could", "might", "still unsure" or "will need to revisit" for open questions; use definite wording for established behavior. Distinguish what exists now from proposals and future improvements.
 - Keep the technical explanations conversational, but do not force slang or copy spelling and grammar mistakes. Match the surrounding document's capitalization and level of formality rather than imposing a uniform editorial style.
-- Talk like a bored dev
-
-## Explain the reasoning
-
-- Describe what happens and why. Include the constraint that made the approach necessary, not just the resulting API or structure.
-- When a choice matters, show the alternatives, their practical costs and the chosen approach. Explain why an option was rejected without turning the discussion into a formal decision framework.
-- State the scope and limitations directly: what is supported, what is not yet implemented and what is left for later.
-- Keep tradeoffs grounded in this implementation: ownership, coupling, byte footprint, extra scans, locking, testability or complexity. Do not claim performance benefits without evidence; leave benchmarking as an open question when appropriate.
-- Comparisons with the Java implementation are useful when they explain a change or a lesson learned. Include them only when relevant and supported by the existing notes or code.
-- For edge cases, describe the setup, the operation and the resulting state. Explain why the case is reachable and which invariant or assumption it affects.
+- Talk like a bored dev, using simple words and clear phrasing.
 
 ## Technical documentation structure
 
 - Begin with a brief description of the component, format or behavior and its goal.
+- Read the relevant code comments for explanations of the concept, its purpose and the current design. Use those explanations alongside the existing notes; reconcile them with the current implementation when needed rather than copying comments verbatim.
+- Explain the high level concept before the implementation. Define terms when they first matter, including distinctions such as logical identity versus physical placement or ownership versus access.
+- Present the implementation succinctly: identify the responsible components, their ownership boundaries and the main flow. Keep field layouts and concrete examples where they help explain the concept, but avoid a method-by-method inventory or repeating the code in prose.
 - Organize around the subject, with simple headings such as `High level`, `Layout`, `process`, `Planning phase`, `Reasoning`, `Example`, `Possible improvements` and `See also`. Follow the local document's conventions.
 - Explain an operation in execution order. Use numbered steps for ordered checks and actions, bullets for fields, responsibilities, scenarios or tradeoffs, and prose for reasoning.
-- State invariants and ownership boundaries where they affect behavior. Explain both the normal path and relevant exceptions.
 - Use `TBD` or `Not yet implemented` for unfinished sections when appropriate. Do not fill them with speculative behavior presented as implemented.
+- Match the high level folder structure to the crates and modules in the codebase.
+- Not every struct and rs file requires a document - if multiple files aggregate to produce a single functionality, keep them together
+- If a topic spans multiple files, create a subfolder and place all of them in there
+- Do not jump from topic to topic and back again. Detail a topic until the end, then move to another one. Avoid talking about something, mentioning another topic, then going back to the first one.
+- Do not document things that are obviously placeholders & testing purposes only.
+- README.md from each folder/subfolder should not contain detailed technical concepts, only act as an index to that subfolder/module being documented there.
+- For every module being documented, do a cross check in "decision log.md" and "implementation notes.md" for any notes and decisions around that module. Do not include/copy previously considered options, but if there are arguments for the current implementation choice, you can add them in the technical doc
 
 ## Examples and Markdown conventions
 
