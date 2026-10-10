@@ -16,7 +16,7 @@ impl Default for Bitmap {
 impl Bitmap {
     // region CONSTRUCTORS
     /// Create an empty bitmap
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { value: 0 }
     }
 
@@ -94,8 +94,38 @@ mod test {
 
     #[test]
     pub fn toggle_leaves_others_unaffected() {
+        // 5 in binary is 0101
         let mut bitmap = Bitmap::from_u64(5u64);
         bitmap.toggle(1);
+        // we expect to find 0111 (7)
         assert_eq!(bitmap.value, 7u64);
+    }
+
+    #[test]
+    pub fn set_correctly_enables_flag_and_leaves_others_unaffected() {
+        let mut bitmap = Bitmap::from_u64(5u64);
+        // 5 in binary is 0101
+        bitmap.set(1);
+        // we expect to find 0111 (7)
+        assert_eq!(bitmap.value, 7u64);
+    }
+
+    #[test]
+    pub fn unset_correctly_disables_flag_and_leaves_others_unaffected() {
+        let mut bitmap = Bitmap::from_u64(7u64);
+        // 7 in binary is 0111
+        bitmap.unset(1);
+        // we expect to find 0101 (5)
+        assert_eq!(bitmap.value, 5u64);
+    }
+
+    #[test]
+    pub fn check_correctly_returns_flag_value() {
+        let bitmap = Bitmap::from_u64(5u64);
+
+        assert!(bitmap.check(0));
+        assert!(!bitmap.check(1));
+        assert!(bitmap.check(2));
+        assert!(!bitmap.check(3));
     }
 }

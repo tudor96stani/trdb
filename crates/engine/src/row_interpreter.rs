@@ -1,3 +1,5 @@
+use shared::binary_helpers::bin_error::BinaryError;
+use shared::binary_helpers::bitmap::Bitmap;
 use shared::binary_helpers::conversions::{ConversionError, UsizeConversion};
 use shared::schemas::data_type::DataType;
 use shared::schemas::row::{FIXED_LEN_SIZE, Row, RowCellValue};
@@ -16,6 +18,14 @@ pub enum RowInterpreterError {
     )]
     MissingSchemaEntryForRowCell {
         /// The schema entry id referenced by the row cell.
+        schema_entry_id: SchemaEntryId,
+    },
+    /// The row does not contain a schema entry that is not present in the provided schema.
+    #[error(
+        "row cell does not contain schema entry {schema_entry_id:?}, but that entry is present in the provided schema"
+    )]
+    MissingRowCellForSchemaEntry {
+        /// The schema entry id missing the row cell.
         schema_entry_id: SchemaEntryId,
     },
     /// Error during conversion between data types
@@ -37,52 +47,57 @@ pub enum RowInterpreterError {
         /// Actual buffer length.
         actual: usize,
     },
+    /// An error occurred while performing binary operations on the row
+    #[error("Error while performing binary operations")]
+    Binary(#[from] BinaryError),
+}
+
+struct RowMetadata {
+    row_size_bytes: usize,
+    nb_fixed: usize,
+    nb_var: usize,
 }
 
 /// Encode a row to binary
 pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterError> {
     // TODO validate row matches schema before converting
 
-    let row_size = compute_row_size_in_bytes(row, schema)?;
-    let row_size_as_u16 = row_size.to_u16()?;
-    let mut vec: Vec<u8> = vec![0u8; row_size];
+    let metadata = compute_metadata(row, schema)?;
+    let mut result_bytes: Vec<u8> = vec![0u8; metadata.row_size_bytes];
 
-    fill_in_row_header(&mut vec, row_size_as_u16, schema)?;
+    fill_in_row_header(&mut result_bytes, &metadata)?;
 
     // Populate fixed sized columns
-    fill_in_fixed_sized_columns(&mut vec, row, schema)?;
+    fill_in_fixed_sized_columns(&mut result_bytes, row, schema)?;
 
     // Populate null bitmap
-    //fill_in_null_bitmap(&mut vec, row, schema)?;
+    fill_in_null_bitmap(&mut result_bytes, &metadata, row, schema)?;
     // Populate var len offsets array
 
     // Populate string blob
 
-    Ok(vec)
+    Ok(result_bytes)
 }
 
-// fn fill_in_null_bitmap(vec: &[u8], row: &Row, schema: &Schema) -> Result<(), RowInterpreterError> {
-//     //for entry in schema.c
-//     Ok(())
-// }
-
+//region Fill in bytes
+/// Returns the end position of the fixed sized segment
 fn fill_in_fixed_sized_columns(
     vec: &mut [u8],
     row: &Row,
     schema: &Schema,
-) -> Result<(), RowInterpreterError> {
-    let mut fixed_sized: Vec<_> = schema
+) -> Result<usize, RowInterpreterError> {
+    let mut fixed_sized_schema_entries: Vec<_> = schema
         .columns()
         .iter()
         .filter(|(_, entry)| entry.is_fixed_size())
         .map(|(_, entry)| entry)
         .collect();
 
-    fixed_sized.sort_by_key(|e| e.position());
+    fixed_sized_schema_entries.sort_by_key(|e| e.position());
 
     // The fixed sized columns start from this index
     let base_index: usize = HEADER_SIZE;
-    let needed_size = base_index + fixed_sized.len() * FIXED_LEN_SIZE;
+    let needed_size = base_index + fixed_sized_schema_entries.len() * FIXED_LEN_SIZE;
 
     if vec.len() < needed_size {
         return Err(RowInterpreterError::BufferTooSmall {
@@ -91,7 +106,7 @@ fn fill_in_fixed_sized_columns(
         });
     }
 
-    for (index, entry) in fixed_sized.iter().enumerate() {
+    for (index, entry) in fixed_sized_schema_entries.iter().enumerate() {
         let row_cell =
             row.get(&entry.id())
                 .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell {
@@ -112,13 +127,12 @@ fn fill_in_fixed_sized_columns(
         vec[start_offset..start_offset + FIXED_LEN_SIZE].copy_from_slice(&value.to_le_bytes())
     }
 
-    Ok(())
+    Ok(needed_size)
 }
 
 fn fill_in_row_header(
     vec: &mut [u8],
-    row_size: u16,
-    schema: &Schema,
+    row_metadata: &RowMetadata,
 ) -> Result<(), RowInterpreterError> {
     if vec.len() < HEADER_SIZE {
         return Err(RowInterpreterError::BufferTooSmall {
@@ -127,27 +141,80 @@ fn fill_in_row_header(
         });
     }
 
-    let nb_fixed_cols = schema
-        .columns()
-        .iter()
-        .filter(|(_, entry)| entry.is_fixed_size())
-        .count()
-        .to_u16()?;
-
-    let nb_var_len_cols = schema
-        .columns()
-        .iter()
-        .filter(|(_, entry)| !entry.is_fixed_size())
-        .count()
-        .to_u16()?;
-
-    let values = [row_size, nb_fixed_cols, nb_var_len_cols];
+    let values = [
+        row_metadata.row_size_bytes.to_u16()?,
+        row_metadata.nb_fixed.to_u16()?,
+        row_metadata.nb_var.to_u16()?,
+    ];
 
     for (index, value) in values.iter().enumerate() {
         vec[index * 2..index * 2 + 2].copy_from_slice(&value.to_le_bytes());
     }
 
     Ok(())
+}
+
+fn fill_in_null_bitmap(
+    result_bytes: &mut [u8],
+    row_metadata: &RowMetadata,
+    row: &Row,
+    schema: &Schema,
+) -> Result<(), RowInterpreterError> {
+    let mut bitmap = Bitmap::new();
+    let mut index = 0usize;
+    for entry in schema.columns_sorted() {
+        let value =
+            row.get(&entry.id())
+                .ok_or(RowInterpreterError::MissingRowCellForSchemaEntry {
+                    schema_entry_id: entry.id(),
+                })?;
+        match value.value() {
+            RowCellValue::NULL => {
+                bitmap.set(index);
+            }
+            RowCellValue::Int(_) | RowCellValue::String(_) => {
+                continue;
+            }
+        }
+        index += 1;
+    }
+
+    let bitmap_bytes = bitmap.to_bytes()?;
+
+    let bitmap_start = get_null_bitmap_start(row_metadata);
+
+    result_bytes[bitmap_start..bitmap_start + NULL_BITMAP_SIZE].copy_from_slice(&bitmap_bytes);
+
+    Ok(())
+}
+//endregion
+
+//region Metadata
+
+/// Creates a `RowMetadata` value for the provided row.
+///
+/// ## Returns
+/// - `RowMetadata' filled in if successful, error otherwise
+fn compute_metadata(row: &Row, schema: &Schema) -> Result<RowMetadata, RowInterpreterError> {
+    let size = compute_row_size_in_bytes(row, schema)?;
+
+    let nb_fixed_cols = schema
+        .columns()
+        .iter()
+        .filter(|(_, entry)| entry.is_fixed_size())
+        .count();
+
+    let nb_var_len_cols = schema
+        .columns()
+        .iter()
+        .filter(|(_, entry)| !entry.is_fixed_size())
+        .count();
+
+    Ok(RowMetadata {
+        row_size_bytes: size,
+        nb_fixed: nb_fixed_cols,
+        nb_var: nb_var_len_cols,
+    })
 }
 
 fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInterpreterError> {
@@ -184,46 +251,37 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInt
     Ok(total)
 }
 
+/// Returns the position in the byte array of the NULL bitmap
+fn get_null_bitmap_start(row_metadata: &RowMetadata) -> usize {
+    HEADER_SIZE + FIXED_LEN_SIZE * row_metadata.nb_fixed
+}
+//endregion
+
 #[cfg(test)]
-mod tests {
+mod api_tests {
+    use super::test_helpers::*;
+    use crate::row_interpreter::to_binary;
+    #[test]
+    pub fn to_binary_returns_correct_byte_array() {
+        // arrange
+        let schema = create_schema();
+        let row = create_row(&schema);
+
+        // act
+        let bytes = to_binary(&row, &schema).unwrap();
+
+        // assert
+        assert!(!bytes.is_empty())
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
     use super::*;
-    use shared::schemas::schema::{Schema, SchemaEntry};
-
-    fn create_schema() -> Schema {
-        Schema::builder(1)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .column("age", DataType::Int, 2, false)
-            .column("email", DataType::String, 3, false)
-            .build()
-    }
-
-    fn create_schema_with_interleaved_fixed_columns() -> Schema {
-        Schema::builder(2)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .column("age", DataType::Int, 2, false)
-            .column("email", DataType::String, 3, false)
-            .column("score", DataType::Int, 4, false)
-            .build()
-    }
-
-    fn create_row(schema: &Schema) -> Row {
-        Row::builder(schema)
-            .value_named("id", 1)
-            .value_named("name", "Mary")
-            .value_named("age", 25)
-            .value_named("email", "mary@mail.com")
-            .build()
-    }
-
-    fn entry_named<'a>(schema: &'a Schema, name: &str) -> &'a SchemaEntry {
-        schema
-            .columns()
-            .values()
-            .find(|entry| entry.name() == name)
-            .unwrap()
-    }
+    use crate::row_interpreter::test_helpers::{
+        create_row, create_schema, create_schema_with_interleaved_fixed_columns, entry_named,
+    };
+    use shared::schemas::schema::Schema;
 
     #[test]
     fn compute_row_size_in_bytes_returns_correct_size() {
@@ -241,11 +299,14 @@ mod tests {
     #[test]
     fn fill_in_row_header_writes_row_size_and_column_counts_as_little_endian_u16s() {
         // arrange
-        let schema = create_schema_with_interleaved_fixed_columns();
         let mut bytes = vec![0; HEADER_SIZE];
-
+        let metadata = RowMetadata {
+            row_size_bytes: 300,
+            nb_fixed: 3,
+            nb_var: 2,
+        };
         // act
-        fill_in_row_header(&mut bytes, 300, &schema).unwrap();
+        fill_in_row_header(&mut bytes, &metadata).unwrap();
 
         // assert
         assert_eq!(bytes, vec![44, 1, 3, 0, 2, 0]);
@@ -254,11 +315,14 @@ mod tests {
     #[test]
     fn fill_in_row_header_errors_when_buffer_is_too_small() {
         // arrange
-        let schema = create_schema();
         let mut bytes = vec![0; HEADER_SIZE - 1];
-
+        let metadata = RowMetadata {
+            row_size_bytes: 43,
+            nb_fixed: 2,
+            nb_var: 2,
+        };
         // act
-        let error = fill_in_row_header(&mut bytes, 43, &schema).unwrap_err();
+        let error = fill_in_row_header(&mut bytes, &metadata).unwrap_err();
 
         // assert
         assert!(matches!(
@@ -361,5 +425,63 @@ mod tests {
             RowInterpreterError::BufferTooSmall { needed, actual }
                 if needed == HEADER_SIZE + 3 * FIXED_LEN_SIZE && actual == HEADER_SIZE + 3 * FIXED_LEN_SIZE - 1
         ));
+    }
+
+    #[test]
+    fn get_null_bitmap_start_returns_correct_value() {
+        // arrange
+        let metadata = RowMetadata {
+            row_size_bytes: 100,
+            nb_fixed: 6,
+            nb_var: 2,
+        };
+
+        // act
+        let result = get_null_bitmap_start(&metadata);
+
+        // assert
+        assert_eq!(result, 30)
+        // this test is mostly to catch if the computation ever gets messed up or intentionally changed
+    }
+}
+
+#[cfg(test)]
+mod test_helpers {
+    use super::*;
+    use shared::schemas::schema::SchemaEntry;
+    pub(super) fn create_schema() -> Schema {
+        Schema::builder(1)
+            .column("id", DataType::Int, 0, true)
+            .column("name", DataType::String, 1, false)
+            .column("age", DataType::Int, 2, false)
+            .column("email", DataType::String, 3, false)
+            .build()
+    }
+
+    pub(super) fn create_schema_with_interleaved_fixed_columns() -> Schema {
+        Schema::builder(2)
+            .column("id", DataType::Int, 0, true)
+            .column("name", DataType::String, 1, false)
+            .column("age", DataType::Int, 2, false)
+            .column("email", DataType::String, 3, false)
+            .column("score", DataType::Int, 4, false)
+            .build()
+    }
+
+    pub(super) fn create_row(schema: &Schema) -> Row {
+        Row::builder(schema)
+            .value_named("id", 1)
+            .value_named("name", "Mary")
+            .value_named("age", 25)
+            .value_named("email", "mary@mail.com")
+            .build()
+    }
+
+    pub(super) fn entry_named<'a>(schema: &'a Schema, name: &str) -> &'a SchemaEntry {
+        schema
+            .columns()
+            .values()
+            .find(|entry| entry.name() == name)
+            .unwrap()
     }
 }
