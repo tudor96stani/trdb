@@ -1,3 +1,6 @@
+//! This module contains the implementation for the row interpreter helper functions
+//!
+//! These functions will convert an in memory representation of a data row (a `Row` instance) to and from a byte array as defined by the binary representation of a row.
 use shared::binary_helpers::bin_error::BinaryError;
 use shared::binary_helpers::bitmap::Bitmap;
 use shared::binary_helpers::conversions::{ConversionError, UsizeConversion};
@@ -6,8 +9,14 @@ use shared::schemas::row::{FIXED_LEN_SIZE, Row, RowCellValue};
 use shared::schemas::schema::{Schema, SchemaEntryId};
 use thiserror::Error;
 
+/// The size of the header of a row, in bytes
 const HEADER_SIZE: usize = 6;
+
+/// The size of the null bitmap, in bytes
 const NULL_BITMAP_SIZE: usize = 8;
+
+/// The size of an offset, used in the offsets array to store the end offset of each string from the row, in bytes
+const OFFSET_SIZE: usize = 2;
 
 /// Errors that can occur during encoding and decoding rows
 #[derive(Debug, Error)]
@@ -72,14 +81,73 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
 
     // Populate null bitmap
     fill_in_null_bitmap(&mut result_bytes, &metadata, row, schema)?;
-    // Populate var len offsets array
 
-    // Populate string blob
+    // Populate var len offsets array
+    fill_in_strings(&mut result_bytes, &metadata, row, schema)?;
 
     Ok(result_bytes)
 }
 
 //region Fill in bytes
+fn fill_in_strings(
+    vec: &mut [u8],
+    metadata: &RowMetadata,
+    row: &Row,
+    schema: &Schema,
+) -> Result<(), RowInterpreterError> {
+    let mut string_schema_entries: Vec<_> = schema
+        .columns()
+        .iter()
+        .filter(|(_, entry)| !entry.is_fixed_size())
+        .map(|(_, entry)| entry)
+        .collect();
+
+    string_schema_entries.sort_by_key(|e| e.position());
+
+    // this is where the offsets array will start (used to know where to write the offset in the byte array. virtual/relative index, not actual position in the main byte array
+    let offsets_array_base_index =
+        HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE;
+    // this index is used to track what is the end offset (relative to the start of the array of offsets) for the column we are currently tracking.
+    let mut offsets_array_collector_index = 0;
+
+    // this is where we will write the actual strings (initialized to the place where we will write the first string, updated by the loop as more string are added). concrete index, actual position in the main byte array
+    let mut string_blob_collector = offsets_array_base_index + metadata.nb_var * OFFSET_SIZE;
+
+    for (index, entry) in string_schema_entries.iter().enumerate() {
+        let row_cell =
+            row.get(&entry.id())
+                .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell {
+                    schema_entry_id: entry.id(),
+                })?;
+
+        let string_value = match row_cell.value() {
+            RowCellValue::String(s) => s,
+            RowCellValue::NULL => "",
+            RowCellValue::Int(_) => {
+                return Err(RowInterpreterError::MismatchedTypes {
+                    expected: DataType::String,
+                    found: DataType::Int,
+                });
+            }
+        };
+
+        // First let's write the entry in the array
+        let offset_starting_index = offsets_array_base_index + index * OFFSET_SIZE;
+        // Since this string will be placed right after the previous one, we take the previous end offset we had and add this one's size (first run collector will be 0)
+        let offset_to_write = (offsets_array_collector_index + string_value.len()).to_u16()?;
+        vec[offset_starting_index..offset_starting_index + OFFSET_SIZE]
+            .copy_from_slice(&offset_to_write.to_le_bytes());
+        offsets_array_collector_index += string_value.len();
+
+        // Now let's write the actual string
+        vec[string_blob_collector..string_blob_collector + string_value.len()]
+            .copy_from_slice(string_value.as_bytes());
+        string_blob_collector += string_value.len()
+    }
+
+    Ok(())
+}
+
 /// Returns the end position of the fixed sized segment
 fn fill_in_fixed_sized_columns(
     vec: &mut [u8],
@@ -161,13 +229,13 @@ fn fill_in_null_bitmap(
     schema: &Schema,
 ) -> Result<(), RowInterpreterError> {
     let mut bitmap = Bitmap::new();
-    let mut index = 0usize;
-    for entry in schema.columns_sorted() {
+    for (index, entry) in schema.columns_sorted().enumerate() {
         let value =
             row.get(&entry.id())
                 .ok_or(RowInterpreterError::MissingRowCellForSchemaEntry {
                     schema_entry_id: entry.id(),
                 })?;
+
         match value.value() {
             RowCellValue::NULL => {
                 bitmap.set(index);
@@ -176,7 +244,6 @@ fn fill_in_null_bitmap(
                 continue;
             }
         }
-        index += 1;
     }
 
     let bitmap_bytes = bitmap.to_bytes()?;
@@ -271,7 +338,22 @@ mod api_tests {
         let bytes = to_binary(&row, &schema).unwrap();
 
         // assert
-        assert!(!bytes.is_empty())
+        // Expected layout (byte ranges are relative to the start of the row):
+        // | 0..6               | 6..14    | 14..22      | 22..26             | 26..43               |
+        // | header             | integers | NULL bitmap | string end offsets | string blob          |
+        // | size=43, I=2, S=2   | 1, 25    | 0           | 4, 17              | "Mary""mary@mail.com" |
+        // Numeric fields are little-endian. String end offsets are relative to
+        // the blob: "Mary" occupies 0..4 and "mary@mail.com" occupies 4..17.
+        let expected = [
+            0x2B, 0x00, 0x02, 0x00, 0x02, 0x00, // header: 43 bytes, 2 ints, 2 strings
+            0x01, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, // integers: 1, 25
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // NULL bitmap
+            0x04, 0x00, 0x11, 0x00, // string end offsets: 4, 17
+            0x4D, 0x61, 0x72, 0x79, // "Mary"
+            0x6D, 0x61, 0x72, 0x79, 0x40, 0x6D, 0x61, 0x69, 0x6C, 0x2E, 0x63, 0x6F,
+            0x6D, // "mary@mail.com"
+        ];
+        assert_eq!(bytes.as_slice(), &expected);
     }
 }
 
