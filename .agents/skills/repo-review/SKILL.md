@@ -1,4 +1,4 @@
-﻿---
+---
 name: repository-audit
 description: Perform an on-demand repository-wide audit covering test gaps, documentation drift, technical debt, and architecture consistency. Deliver a comprehensive report in the Codex task response without modifying the repository.
 ---

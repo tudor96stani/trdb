@@ -4,6 +4,8 @@
 /logs/
 /DATA/
 
+**/.DS_Store
+
 # Ignore volatile UI-related state
 docs/.obsidian/workspace.json
 docs/.obsidian/app.json

@@ -50,6 +50,10 @@
 | SCHEMA-BLD-002 | Successful construction shall preserve the supplied owner ID and each column's ID, name, type, position, and primary-key flag. |
 | SCHEMA-BLD-003 | The builder shall accept and store an ordered list of primary-key column IDs through `.pk(...)` and pass that order unchanged to the built schema. |
 | SCHEMA-BLD-004 | `build()` shall return an error if any column is marked as a primary key and no primary-key ordering list was supplied. |
+| SCHEMA-BLD-005 | `build()` shall return an error if the primary-key ordering list supplied through `.pk(...)` contains a column ID that does not identify any supplied column. |
+| SCHEMA-BLD-006 | `build()` shall return an error if the primary-key ordering list supplied through `.pk(...)` contains the same column ID more than once. |
+| SCHEMA-BLD-007 | `build()` shall return an error if the primary-key ordering list supplied through `.pk(...)` omits the ID of any supplied column whose `is_pk` flag is true. |
+| SCHEMA-BLD-008 | `build()` shall return an error if the primary-key ordering list supplied through `.pk(...)` includes the ID of any supplied column whose `is_pk` flag is false. |
 
 ## Pending Review
 
