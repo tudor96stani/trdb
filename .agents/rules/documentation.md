@@ -1,10 +1,10 @@
 # Documentation instructions
 
-These instructions apply when writing or editing technical documentation under `docs/technical_docs/`. They describe the style used there; they do not prescribe implementation choices.
+These instructions apply when writing or editing technical documentation under `../../docs/technical_docs`. They describe the style used there; they do not prescribe implementation choices.
 
 ## Scope
 
-- Work only under `docs/technical_docs/` for documentation tasks unless the prompt explicitly requests changes elsewhere.
+- Work only under `../../docs/technical_docs` for documentation tasks unless the prompt explicitly requests changes elsewhere.
 - Never edit, append to, rewrite or otherwise update `docs/decision log.md` or `docs/implementation notes.md` unless specifically asked to update that file in the prompt. A general request to document an implementation or explain a decision does not authorize updating either file.
 - Use technical documentation to describe behavior, formats, constraints and relevant reasoning. Do not automatically add decision log entries or implementation notes as part of this work.
 - Document how the component behaves, how it is implemented and why it is designed that way. Technical docs are not a code review or bug backlog: do not include implementation faults, missing checks, broken edge cases, correctness warnings or lists of shortcomings. Bugs belong in a task tracking tool, not in these documents. Do not investigate the code for new issues as part of a documentation review unless explicitly asked.
