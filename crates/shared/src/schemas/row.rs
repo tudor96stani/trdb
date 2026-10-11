@@ -195,14 +195,16 @@ mod row_builder_tests {
     #[test]
     fn test_row_builder_creates_cells_from_column_ids() {
         let schema = Schema::builder(1)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .build();
+            .column(0, "id", DataType::Int, 0, true)
+            .column(1, "name", DataType::String, 1, false)
+            .pk([0])
+            .build()
+            .unwrap();
 
         let row = Row::builder(&schema).value(0, 10).value(1, "Ada").build();
 
         let mut values = row.values().collect::<Vec<_>>();
-        values.sort_by_key(|cell| cell.schema_entry_id().column_id());
+        values.sort_by_key(|cell| schema.columns()[&cell.schema_entry_id()].position());
 
         assert_eq!(values.len(), 2);
         assert_eq!(values[0].schema_entry_id().owner_id(), 1);
@@ -216,10 +218,12 @@ mod row_builder_tests {
     #[test]
     fn test_row_builder_creates_cells_from_schema_entries_positions_and_names() {
         let schema = Schema::builder(1)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .column("email", DataType::String, 2, false)
-            .build();
+            .column(0, "id", DataType::Int, 0, true)
+            .column(1, "name", DataType::String, 1, false)
+            .column(2, "email", DataType::String, 2, false)
+            .pk([0])
+            .build()
+            .unwrap();
 
         let id_entry = schema
             .columns()
@@ -234,7 +238,7 @@ mod row_builder_tests {
             .build();
 
         let mut values = row.values().collect::<Vec<_>>();
-        values.sort_by_key(|cell| cell.schema_entry_id().column_id());
+        values.sort_by_key(|cell| schema.columns()[&cell.schema_entry_id()].position());
 
         assert_eq!(values.len(), 3);
         assert!(matches!(values[0].value(), RowCellValue::Int(10)));

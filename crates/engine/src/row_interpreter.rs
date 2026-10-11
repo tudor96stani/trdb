@@ -445,9 +445,11 @@ mod unit_tests {
     fn fill_in_fixed_sized_columns_writes_zero_for_null_fixed_values() {
         // arrange
         let schema = Schema::builder(3)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .build();
+            .column(0, "id", DataType::Int, 0, true)
+            .column(1, "name", DataType::String, 1, false)
+            .pk([0])
+            .build()
+            .unwrap();
         let row = Row::builder(&schema)
             .value_named("id", RowCellValue::NULL)
             .value_named("name", "Mary")
@@ -533,21 +535,25 @@ mod test_helpers {
     use shared::schemas::schema::SchemaEntry;
     pub(super) fn create_schema() -> Schema {
         Schema::builder(1)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .column("age", DataType::Int, 2, false)
-            .column("email", DataType::String, 3, false)
+            .column(0, "id", DataType::Int, 0, true)
+            .column(1, "name", DataType::String, 1, false)
+            .column(2, "age", DataType::Int, 2, false)
+            .column(3, "email", DataType::String, 3, false)
+            .pk([0])
             .build()
+            .unwrap()
     }
 
     pub(super) fn create_schema_with_interleaved_fixed_columns() -> Schema {
         Schema::builder(2)
-            .column("id", DataType::Int, 0, true)
-            .column("name", DataType::String, 1, false)
-            .column("age", DataType::Int, 2, false)
-            .column("email", DataType::String, 3, false)
-            .column("score", DataType::Int, 4, false)
+            .column(0, "id", DataType::Int, 0, true)
+            .column(1, "name", DataType::String, 1, false)
+            .column(2, "age", DataType::Int, 2, false)
+            .column(3, "email", DataType::String, 3, false)
+            .column(4, "score", DataType::Int, 4, false)
+            .pk([0])
             .build()
+            .unwrap()
     }
 
     pub(super) fn create_row(schema: &Schema) -> Row {

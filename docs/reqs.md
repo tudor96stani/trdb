@@ -42,6 +42,15 @@
 | SCHEMA-004 | In a schema containing N columns, column positions shall be exactly the integers from 0 through N - 1, each occurring once. |
 | SCHEMA-005 | Column IDs shall be independent of column positions: otherwise valid schemas shall permit distinct column IDs assigned to positions in any order, without requiring IDs to equal positions or to be contiguous. |
 
+#### Schema Builder
+
+| ID | Requirement |
+|---|---|
+| SCHEMA-BLD-001 | `build()` shall return an error when the supplied columns violate SCHEMA-001 through SCHEMA-004. |
+| SCHEMA-BLD-002 | Successful construction shall preserve the supplied owner ID and each column's ID, name, type, position, and primary-key flag. |
+| SCHEMA-BLD-003 | The builder shall accept and store an ordered list of primary-key column IDs through `.pk(...)` and pass that order unchanged to the built schema. |
+| SCHEMA-BLD-004 | `build()` shall return an error if any column is marked as a primary key and no primary-key ordering list was supplied. |
+
 ## Pending Review
 
 ## Superseded
