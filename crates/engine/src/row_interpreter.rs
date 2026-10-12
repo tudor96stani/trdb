@@ -89,7 +89,7 @@ struct RowMetadata {
     nb_var: usize,
 }
 
-/// Encode a row to binary
+/// Encode the provided `Row` of the provided `Schema` into a raw byte array.
 pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterError> {
     let metadata = validate_before_serialization(row, schema)?;
     let mut result_bytes: Vec<u8> = vec![0u8; metadata.row_size_bytes];
@@ -108,52 +108,19 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
     Ok(result_bytes)
 }
 
-fn validate_before_serialization(
-    row: &Row,
-    schema: &Schema,
-) -> Result<RowMetadata, RowInterpreterError> {
-    let count = schema.columns().len();
-    if count == 0 || count > 64 {
-        return Err(RowInterpreterError::InvalidColumnCount { count });
-    }
+/// Decodes a raw binary array into a `Row` of the provided `Schema`.
+pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterError> {
+    validate_before_deserialization(bytes, schema)?;
 
-    let mut seen = HashSet::new();
-    for cell in row.values() {
-        let schema_entry_id = cell.schema_entry_id();
-        let entry = schema
-            .columns()
-            .get(&schema_entry_id)
-            .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id })?;
-        if !seen.insert(schema_entry_id) {
-            return Err(RowInterpreterError::DuplicateRowCell { schema_entry_id });
-        }
-        match (entry.data_type(), cell.value()) {
-            (DataType::Int, RowCellValue::String(_)) => {
-                return Err(RowInterpreterError::MismatchedTypes {
-                    expected: DataType::Int,
-                    found: DataType::String,
-                });
-            }
-            (DataType::String, RowCellValue::Int(_)) => {
-                return Err(RowInterpreterError::MismatchedTypes {
-                    expected: DataType::String,
-                    found: DataType::Int,
-                });
-            }
-            // NULL is valid for every column, including primary keys.
-            _ => {}
-        }
-    }
+    // Read header
 
-    for entry in schema.columns().values() {
-        if row.get(&entry.id()).is_none() {
-            return Err(RowInterpreterError::MissingRowCellForSchemaEntry {
-                schema_entry_id: entry.id(),
-            });
-        }
-    }
+    // Read integers
 
-    compute_metadata(row, schema)
+    // Read NULL bitmap
+
+    // Read strings
+
+    todo!()
 }
 
 //region Fill in bytes
@@ -172,7 +139,7 @@ fn fill_in_strings(
 
     string_schema_entries.sort_by_key(|e| e.position());
 
-    // this is where the offsets array will start (used to know where to write the offset in the byte array. virtual/relative index, not actual position in the main byte array
+    // this is where the offsets array will start - used to know where to write the offset in the byte array. virtual/relative index, not actual position in the main byte array
     let offsets_array_base_index =
         HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE;
     // this index is used to track what is the end offset (relative to the start of the array of offsets) for the column we are currently tracking.
@@ -325,7 +292,6 @@ fn fill_in_null_bitmap(
 //endregion
 
 //region Metadata
-
 /// Creates a `RowMetadata` value for the provided row.
 ///
 /// ## Returns
@@ -401,11 +367,66 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInt
 
     Ok(total)
 }
-
 /// Returns the position in the byte array of the NULL bitmap
 fn get_null_bitmap_start(row_metadata: &RowMetadata) -> usize {
     HEADER_SIZE + FIXED_LEN_SIZE * row_metadata.nb_fixed
 }
+
+//endregion
+
+//region validators
+fn validate_before_serialization(
+    row: &Row,
+    schema: &Schema,
+) -> Result<RowMetadata, RowInterpreterError> {
+    let count = schema.columns().len();
+    if count == 0 || count > 64 {
+        return Err(RowInterpreterError::InvalidColumnCount { count });
+    }
+
+    let mut seen = HashSet::new();
+    for cell in row.values() {
+        let schema_entry_id = cell.schema_entry_id();
+        let entry = schema
+            .columns()
+            .get(&schema_entry_id)
+            .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id })?;
+        if !seen.insert(schema_entry_id) {
+            return Err(RowInterpreterError::DuplicateRowCell { schema_entry_id });
+        }
+        match (entry.data_type(), cell.value()) {
+            (DataType::Int, RowCellValue::String(_)) => {
+                return Err(RowInterpreterError::MismatchedTypes {
+                    expected: DataType::Int,
+                    found: DataType::String,
+                });
+            }
+            (DataType::String, RowCellValue::Int(_)) => {
+                return Err(RowInterpreterError::MismatchedTypes {
+                    expected: DataType::String,
+                    found: DataType::Int,
+                });
+            }
+            // NULL is valid for every column, including primary keys.
+            _ => {}
+        }
+    }
+
+    for entry in schema.columns().values() {
+        if row.get(&entry.id()).is_none() {
+            return Err(RowInterpreterError::MissingRowCellForSchemaEntry {
+                schema_entry_id: entry.id(),
+            });
+        }
+    }
+
+    compute_metadata(row, schema)
+}
+
+fn validate_before_deserialization(_: &[u8], _: &Schema) -> Result<(), RowInterpreterError> {
+    Ok(())
+}
+
 //endregion
 
 #[cfg(test)]
