@@ -3,6 +3,23 @@ created: 2026-04-21
 ---
 **This mostly contains random notes taken during development. Ignore Origin references for each note, mostly used for linking in my main Obsidian vault**
 
+## 261011-1050 Additional AI
+Also added some skills to help me write requirements for the functionality - mostly a grill me type thing which will generate the actual reqs, along with a skill that will propose test cases based on those reqs (black box testing) + one that will propose test cases (full or one-liners) based on actual implementation to cover edge cases (white box) + one skill to implement the test cases documented in there. 
+None should alter the codebase in any way (actual codebase I mean). Each step gated by some manual review.
+requirements stored in `/docs/reqs.md`, test cases in `docs/testcases.md`.
+Did a trial run for the `Schema` component - after some adjusting it generated ok reqs and tests. Actually found some issues and gaps in implementation.
+
+#### Origin
+- [[26-7]] 261011-1050 p38
+
+---
+## 261010-0935 AI
+created several skills for agents to help with some of the more boring/uninteresting tasks: maintaining technical docs, writing basic test cases, doing occasional reviews, checking for test gaps, tech debt, other maintenance stuff. mostly to allow me to focus on writing code instead of doing all of those
+
+#### Origin
+- [[26-7]] 261010-0935 p34
+
+---
 ## 260501-1304 schema builder
 for the `Schema` struct (and inner field structs), instead of exposing the constructors directly, I created a `SchemaBuilder` which allows you to create the `Schema` one field at a time, without the need to provide the data as the actual structs, but as raw values instead (column name as string, etc.). 
 

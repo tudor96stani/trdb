@@ -7,6 +7,7 @@ use shared::binary_helpers::conversions::{ConversionError, UsizeConversion};
 use shared::schemas::data_type::DataType;
 use shared::schemas::row::{FIXED_LEN_SIZE, Row, RowCellValue};
 use shared::schemas::schema::{Schema, SchemaEntryId};
+use std::collections::HashSet;
 use thiserror::Error;
 
 /// The size of the header of a row, in bytes
@@ -18,9 +19,30 @@ const NULL_BITMAP_SIZE: usize = 8;
 /// The size of an offset, used in the offsets array to store the end offset of each string from the row, in bytes
 const OFFSET_SIZE: usize = 2;
 
+/// Maximum complete encoded row size (ROW-BIN-008).
+const MAX_ROW_SIZE: usize = 3_996;
+
 /// Errors that can occur during encoding and decoding rows
 #[derive(Debug, Error)]
 pub enum RowInterpreterError {
+    /// The schema violates the permitted column-count range.
+    #[error("schema must contain between 1 and 64 columns, got {count}")]
+    InvalidColumnCount {
+        /// Number of schema columns.
+        count: usize,
+    },
+    /// More than one cell references the same column.
+    #[error("duplicate row cell for schema entry {schema_entry_id:?}")]
+    DuplicateRowCell {
+        /// ID referenced by multiple cells.
+        schema_entry_id: SchemaEntryId,
+    },
+    /// The complete encoded row exceeds the storage limit.
+    #[error("encoded row exceeds the maximum size of {max_size} bytes")]
+    RowTooLarge {
+        /// Maximum permitted encoded row size.
+        max_size: usize,
+    },
     /// The row references a schema entry that is not present in the provided schema.
     #[error(
         "row cell references schema entry {schema_entry_id:?}, but that entry is not present in the provided schema"
@@ -29,7 +51,7 @@ pub enum RowInterpreterError {
         /// The schema entry id referenced by the row cell.
         schema_entry_id: SchemaEntryId,
     },
-    /// The row does not contain a schema entry that is not present in the provided schema.
+    /// The row is missing a cell for a column in the provided schema.
     #[error(
         "row cell does not contain schema entry {schema_entry_id:?}, but that entry is present in the provided schema"
     )]
@@ -69,9 +91,7 @@ struct RowMetadata {
 
 /// Encode a row to binary
 pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterError> {
-    // TODO validate row matches schema before converting
-
-    let metadata = compute_metadata(row, schema)?;
+    let metadata = validate_before_serialization(row, schema)?;
     let mut result_bytes: Vec<u8> = vec![0u8; metadata.row_size_bytes];
 
     fill_in_row_header(&mut result_bytes, &metadata)?;
@@ -86,6 +106,54 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
     fill_in_strings(&mut result_bytes, &metadata, row, schema)?;
 
     Ok(result_bytes)
+}
+
+fn validate_before_serialization(
+    row: &Row,
+    schema: &Schema,
+) -> Result<RowMetadata, RowInterpreterError> {
+    let count = schema.columns().len();
+    if count == 0 || count > 64 {
+        return Err(RowInterpreterError::InvalidColumnCount { count });
+    }
+
+    let mut seen = HashSet::new();
+    for cell in row.values() {
+        let schema_entry_id = cell.schema_entry_id();
+        let entry = schema
+            .columns()
+            .get(&schema_entry_id)
+            .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id })?;
+        if !seen.insert(schema_entry_id) {
+            return Err(RowInterpreterError::DuplicateRowCell { schema_entry_id });
+        }
+        match (entry.data_type(), cell.value()) {
+            (DataType::Int, RowCellValue::String(_)) => {
+                return Err(RowInterpreterError::MismatchedTypes {
+                    expected: DataType::Int,
+                    found: DataType::String,
+                });
+            }
+            (DataType::String, RowCellValue::Int(_)) => {
+                return Err(RowInterpreterError::MismatchedTypes {
+                    expected: DataType::String,
+                    found: DataType::Int,
+                });
+            }
+            // NULL is valid for every column, including primary keys.
+            _ => {}
+        }
+    }
+
+    for entry in schema.columns().values() {
+        if row.get(&entry.id()).is_none() {
+            return Err(RowInterpreterError::MissingRowCellForSchemaEntry {
+                schema_entry_id: entry.id(),
+            });
+        }
+    }
+
+    compute_metadata(row, schema)
 }
 
 //region Fill in bytes
@@ -295,23 +363,39 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInt
             },
         )?;
 
-        match schema_entry.data_type() {
+        let cell_size = match schema_entry.data_type() {
             // for integers, we only need to add 4 bytes each.
-            DataType::Int => total += 4usize,
+            DataType::Int => FIXED_LEN_SIZE,
             DataType::String => match cell.value() {
                 // we have to drill into the actual value to find its length
                 RowCellValue::String(s) => {
+                    // Bound the length before adding the offset bytes.
+                    if s.len() > MAX_ROW_SIZE {
+                        return Err(RowInterpreterError::RowTooLarge {
+                            max_size: MAX_ROW_SIZE,
+                        });
+                    }
                     // add both its actual length
-                    total += s.len();
                     // and two bytes for the offsets array
-                    total += 2
+                    s.len() + OFFSET_SIZE
                 }
                 RowCellValue::NULL => {
                     // for a NULL string, only add 2 bytes for the offsets array
-                    total += 2
+                    OFFSET_SIZE
                 }
-                RowCellValue::Int(_) => {}
+                RowCellValue::Int(_) => {
+                    return Err(RowInterpreterError::MismatchedTypes {
+                        expected: DataType::String,
+                        found: DataType::Int,
+                    });
+                }
             },
+        };
+        total += cell_size;
+        if total > MAX_ROW_SIZE {
+            return Err(RowInterpreterError::RowTooLarge {
+                max_size: MAX_ROW_SIZE,
+            });
         }
     }
 
@@ -327,7 +411,143 @@ fn get_null_bitmap_start(row_metadata: &RowMetadata) -> usize {
 #[cfg(test)]
 mod api_tests {
     use super::test_helpers::*;
-    use crate::row_interpreter::to_binary;
+    use super::*;
+
+    #[test]
+    fn serialization_rejects_missing_cells_including_null_columns() {
+        let schema = create_schema();
+        for missing in ["id", "name", "age", "email"] {
+            let mut builder = Row::builder(&schema);
+            for entry in schema.columns_sorted() {
+                if entry.name() != missing {
+                    builder = builder.cell(entry, RowCellValue::NULL);
+                }
+            }
+            assert!(matches!(
+                to_binary(&builder.build(), &schema),
+                Err(RowInterpreterError::MissingRowCellForSchemaEntry { schema_entry_id })
+                    if schema_entry_id == entry_named(&schema, missing).id()
+            ));
+        }
+    }
+
+    #[test]
+    fn serialization_rejects_unknown_column_ids_and_owners() {
+        let schema = Schema::builder(1)
+            .column(7, "value", DataType::Int, 0, false)
+            .build()
+            .unwrap();
+        for (owner, column) in [(1, 99), (2, 7)] {
+            let other_schema = Schema::builder(owner)
+                .column(column, "value", DataType::Int, 0, false)
+                .build()
+                .unwrap();
+            let row = Row::builder(&other_schema).value(column, 1).build();
+            assert!(matches!(
+                to_binary(&row, &schema),
+                Err(RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id })
+                    if schema_entry_id == entry_named(&other_schema, "value").id()
+            ));
+        }
+    }
+
+    #[test]
+    fn serialization_rejects_both_type_mismatches() {
+        let ints = Schema::builder(1)
+            .column(7, "value", DataType::Int, 0, false)
+            .build()
+            .unwrap();
+        let strings = Schema::builder(1)
+            .column(7, "value", DataType::String, 0, false)
+            .build()
+            .unwrap();
+        let int_row = Row::builder(&ints).value(7, 1).build();
+        let string_row = Row::builder(&strings).value(7, "one").build();
+        assert!(matches!(
+            to_binary(&int_row, &strings),
+            Err(RowInterpreterError::MismatchedTypes {
+                expected: DataType::String,
+                found: DataType::Int,
+            })
+        ));
+        assert!(matches!(
+            to_binary(&string_row, &ints),
+            Err(RowInterpreterError::MismatchedTypes {
+                expected: DataType::Int,
+                found: DataType::String,
+            })
+        ));
+    }
+
+    #[test]
+    fn serialization_enforces_complete_row_size_using_utf8_bytes() {
+        let schema = Schema::builder(1)
+            .column(7, "number", DataType::Int, 0, false)
+            .column(99, "text", DataType::String, 1, false)
+            .column(42, "empty", DataType::String, 2, false)
+            .build()
+            .unwrap();
+        // 22 bytes of header, integer, bitmap, and offsets; 3974 UTF-8 bytes.
+        let text = "é".repeat(1_987);
+        for extra in ["", "x"] {
+            let row = Row::builder(&schema)
+                .value(7, RowCellValue::NULL)
+                .value(99, format!("{text}{extra}"))
+                .value(42, RowCellValue::NULL)
+                .build();
+            let result = to_binary(&row, &schema);
+            if extra.is_empty() {
+                let bytes = result.unwrap();
+                assert_eq!(bytes.len(), 3_996);
+                assert_eq!(&bytes[..2], &3_996u16.to_le_bytes());
+                assert_eq!(&bytes[22..], text.as_bytes());
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(RowInterpreterError::RowTooLarge { max_size: 3_996 })
+                ));
+            }
+        }
+        let huge_row = Row::builder(&schema)
+            .value(7, 0)
+            .value(99, "x".repeat(65_536))
+            .value(42, "")
+            .build();
+        assert!(matches!(
+            to_binary(&huge_row, &schema),
+            Err(RowInterpreterError::RowTooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn serialization_accepts_64_null_columns_including_both_primary_key_types() {
+        let mut builder = Schema::builder(1);
+        for position in 0..64 {
+            builder = builder.column(
+                position as u16,
+                format!("column_{position}"),
+                if position % 2 == 0 {
+                    DataType::Int
+                } else {
+                    DataType::String
+                },
+                position,
+                position < 2,
+            );
+        }
+        let schema = builder.pk([0, 1]).build().unwrap();
+        let mut builder = Row::builder(&schema);
+        for entry in schema.columns_sorted() {
+            builder = builder.cell(entry, RowCellValue::NULL);
+        }
+        let bytes = to_binary(&builder.build(), &schema).unwrap();
+        assert_eq!(bytes.len(), 206);
+        assert_eq!(&bytes[..6], &[206, 0, 32, 0, 32, 0]);
+        assert!(bytes[6..134].iter().all(|byte| *byte == 0));
+        assert_eq!(&bytes[134..142], &[0xFF; 8]);
+        assert!(bytes[142..].iter().all(|byte| *byte == 0));
+    }
+
     #[test]
     pub fn to_binary_returns_correct_byte_array() {
         // arrange
