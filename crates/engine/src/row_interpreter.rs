@@ -60,7 +60,7 @@ pub enum RowInterpreterError {
         schema_entry_id: SchemaEntryId,
     },
     /// Error during conversion between data types
-    #[error("Error while converting between data types")]
+    #[error("Error while converting between data types: {0}")]
     Conversion(#[from] ConversionError),
     /// Mismatch between the data type that was expected and the one that was found
     #[error("Mismatch between expected data type and found data type")]
@@ -79,8 +79,25 @@ pub enum RowInterpreterError {
         actual: usize,
     },
     /// An error occurred while performing binary operations on the row
-    #[error("Error while performing binary operations")]
+    #[error("Error while performing binary operations: {0}")]
     Binary(#[from] BinaryError),
+    /// Mismatch between expected and actual row size
+    #[error("Mismatch between expected and actual row size")]
+    MismatchedSize {
+        /// Expected size of row
+        expected: usize,
+        /// Actual size of row
+        actual: usize,
+    },
+    /// Error while trying to deserialize an integer from the binary array of a row
+    #[error("Failed to deserialize integer at index {index}: {source}")]
+    IntegerDeserialization {
+        /// Index of the integer column that could not be deserialized
+        index: usize,
+        /// Actual error source
+        #[source]
+        source: BinaryError,
+    },
 }
 
 struct RowMetadata {
@@ -110,13 +127,24 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
 
 /// Decodes a raw binary array into a `Row` of the provided `Schema`.
 pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterError> {
-    validate_before_deserialization(bytes, schema)?;
-
-    // Read header
+    let metadata = validate_before_deserialization(bytes, schema)?;
 
     // Read integers
+    let mut integers: Vec<u32> = vec![];
+    let integers_start_offset = HEADER_SIZE;
+    for i in 0..metadata.nb_fixed {
+        // Transform the error if it occurs, just for nicer debugging
+        let value = shared::binary_helpers::le::read_le::<u32>(
+            bytes,
+            integers_start_offset + i * FIXED_LEN_SIZE,
+        )
+        .map_err(|source| RowInterpreterError::IntegerDeserialization { index: i, source })?;
+        integers.push(value);
+    }
 
     // Read NULL bitmap
+    // let null_bitmap_start = HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE;
+    // let null_bitmap = shared::binary_helpers::le::read_le::<u64>(bytes, null_bitmap_start)?;
 
     // Read strings
 
@@ -423,8 +451,37 @@ fn validate_before_serialization(
     compute_metadata(row, schema)
 }
 
-fn validate_before_deserialization(_: &[u8], _: &Schema) -> Result<(), RowInterpreterError> {
-    Ok(())
+fn validate_before_deserialization(
+    bytes: &[u8],
+    _: &Schema,
+) -> Result<RowMetadata, RowInterpreterError> {
+    if bytes.len() > MAX_ROW_SIZE {
+        return Err(RowInterpreterError::RowTooLarge {
+            max_size: MAX_ROW_SIZE,
+        });
+    }
+
+    // extract row size from header - stored as a u16 - then convert it to desired usize
+    let row_size_bytes = usize::from(shared::binary_helpers::le::read_le::<u16>(bytes, 0)?);
+
+    // Ensure the declared row size in the header matches the actual length of the byte array
+    {
+        if row_size_bytes != bytes.len() {
+            return Err(RowInterpreterError::MismatchedSize {
+                expected: row_size_bytes,
+                actual: bytes.len(),
+            });
+        }
+    }
+
+    let nb_fixed = usize::from(shared::binary_helpers::le::read_le::<u16>(bytes, 2)?);
+    let nb_var = usize::from(shared::binary_helpers::le::read_le::<u16>(bytes, 4)?);
+
+    Ok(RowMetadata {
+        row_size_bytes,
+        nb_fixed,
+        nb_var,
+    })
 }
 
 //endregion
