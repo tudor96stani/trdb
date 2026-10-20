@@ -8,6 +8,7 @@ use shared::schemas::data_type::DataType;
 use shared::schemas::row::{FIXED_LEN_SIZE, Row, RowCellValue};
 use shared::schemas::schema::{Schema, SchemaEntryId};
 use std::collections::HashSet;
+use std::str::Utf8Error;
 use thiserror::Error;
 
 /// The size of the header of a row, in bytes
@@ -89,14 +90,32 @@ pub enum RowInterpreterError {
         /// Actual size of row
         actual: usize,
     },
-    /// Error while trying to deserialize an integer from the binary array of a row
-    #[error("Failed to deserialize integer at index {index}: {source}")]
+    /// Error while trying to deserialize an integer column from the binary array of a row
+    #[error("Failed to deserialize integer column at index {index}: {source}")]
     IntegerDeserialization {
         /// Index of the integer column that could not be deserialized
         index: usize,
         /// Actual error source
         #[source]
         source: BinaryError,
+    },
+    /// Error while deserializing the string offset from the binary array of a row
+    #[error("Failed to deserialize string end offset for column at index {index}: {source}")]
+    StringOffsetDeserialization {
+        /// Index of the string offset that could not be deserialized
+        index: usize,
+        /// Actual error source
+        #[source]
+        source: BinaryError,
+    },
+    /// Error while trying to deserialize a string column from the binary array of a row
+    #[error("Error while reading the string column at index {index}: {source}")]
+    StringDeserialization {
+        /// Index of the column that could not be deserialized
+        index: usize,
+        /// Actual error source
+        #[source]
+        source: Utf8Error,
     },
 }
 
@@ -129,26 +148,112 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
 pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterError> {
     let metadata = validate_before_deserialization(bytes, schema)?;
 
-    // Read integers
-    let mut integers: Vec<u32> = vec![];
-    let integers_start_offset = HEADER_SIZE;
-    for i in 0..metadata.nb_fixed {
-        // Transform the error if it occurs, just for nicer debugging
-        let value = shared::binary_helpers::le::read_le::<u32>(
-            bytes,
-            integers_start_offset + i * FIXED_LEN_SIZE,
-        )
-        .map_err(|source| RowInterpreterError::IntegerDeserialization { index: i, source })?;
-        integers.push(value);
+    // Read NULL bitmap
+    let bitmap: Bitmap;
+    {
+        let null_bitmap_start = HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE;
+        let null_bitmap_value =
+            shared::binary_helpers::le::read_le::<u64>(bytes, null_bitmap_start)?;
+        bitmap = Bitmap::from_u64(null_bitmap_value);
     }
 
-    // Read NULL bitmap
-    // let null_bitmap_start = HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE;
-    // let null_bitmap = shared::binary_helpers::le::read_le::<u64>(bytes, null_bitmap_start)?;
+    // Read integers
+    let mut integers: Vec<i32> = vec![];
+    {
+        let integers_start_offset = HEADER_SIZE;
+        for i in 0..metadata.nb_fixed {
+            // Transform the error if it occurs, just for nicer debugging
+            let value = shared::binary_helpers::le::read_le::<i32>(
+                bytes,
+                integers_start_offset + i * FIXED_LEN_SIZE,
+            )
+            .map_err(|source| RowInterpreterError::IntegerDeserialization { index: i, source })?;
+            integers.push(value);
+        }
+    }
 
     // Read strings
+    let mut strings: Vec<&str> = vec![];
+    {
+        // this is where the offsets array starts
+        let offsets_array_start =
+            HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE;
+        // this is where the string blob starts
+        let string_blob_start = offsets_array_start + metadata.nb_var * OFFSET_SIZE;
+        // the position to which we currently read in the string blob (basically, the end index of the previous string we just read) - starts the the start of the blob since we did not read anything yet
+        let mut cursor_for_already_read_strings = string_blob_start;
+        for i in 0..metadata.nb_var {
+            // where the offsets array tells us the current string ends
+            let end_offset_of_current_string = shared::binary_helpers::le::read_le::<u16>(
+                bytes,
+                offsets_array_start + i * OFFSET_SIZE,
+            )
+            .map_err(|source| RowInterpreterError::StringOffsetDeserialization {
+                index: i,
+                source,
+            })?;
 
-    todo!()
+            // make it usize
+            let end_offset_of_current_string = usize::from(end_offset_of_current_string);
+
+            // we must read from the end of the previous string (stored in `cursor_for_current_string`) to the offset from the array
+            // the value from the array must be added to the start of the string blob (always) to get the real end offset within the main byte array
+            // if, however, the current string ends at the same offset as the previous, then we know it's either an empty string or NULL - we will determine that later.
+            let string = if cursor_for_already_read_strings
+                == string_blob_start + end_offset_of_current_string
+            {
+                ""
+            } else {
+                match str::from_utf8(
+                    &bytes[cursor_for_already_read_strings
+                        ..string_blob_start + end_offset_of_current_string],
+                ) {
+                    Ok(s) => s,
+                    Err(source) => {
+                        return Err(RowInterpreterError::StringDeserialization { index: i, source });
+                    }
+                }
+            };
+
+            strings.push(string);
+            // update the cursor
+            cursor_for_already_read_strings = string_blob_start + end_offset_of_current_string;
+        }
+    }
+
+    let mut builder = Row::builder(schema);
+
+    let mut fixed_columns: Vec<_> = schema
+        .columns()
+        .iter()
+        .filter(|(_, s)| s.is_fixed_size())
+        .collect();
+    fixed_columns.sort_by_key(|(_, e)| e.position());
+    for (i, (_, entry)) in fixed_columns.iter().enumerate() {
+        let value = if bitmap.check(i) {
+            RowCellValue::NULL
+        } else {
+            RowCellValue::Int(integers[i])
+        };
+        builder = builder.cell(entry, value);
+    }
+
+    let mut string_colums: Vec<_> = schema
+        .columns()
+        .iter()
+        .filter(|(_, s)| !s.is_fixed_size())
+        .collect();
+    string_colums.sort_by_key(|(_, e)| e.position());
+    for (i, (_, entry)) in string_colums.iter().enumerate() {
+        let value = if bitmap.check(i) {
+            RowCellValue::NULL
+        } else {
+            RowCellValue::String(strings[i].to_string())
+        };
+        builder = builder.cell(entry, value);
+    }
+
+    Ok(builder.build())
 }
 
 //region Fill in bytes

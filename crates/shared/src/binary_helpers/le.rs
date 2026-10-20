@@ -67,6 +67,7 @@ macro_rules! impl_little_endian_integer {
 impl_little_endian_integer!(u16);
 impl_little_endian_integer!(u32);
 impl_little_endian_integer!(u64);
+impl_little_endian_integer!(i32);
 
 /// Reads a value of type `T` from a byte slice in little-endian format.
 ///
