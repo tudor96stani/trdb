@@ -4,6 +4,7 @@
 use shared::binary_helpers::bin_error::BinaryError;
 use shared::binary_helpers::bitmap::Bitmap;
 use shared::binary_helpers::conversions::{ConversionError, UsizeConversion};
+use shared::schemas::ObjectId;
 use shared::schemas::data_type::DataType;
 use shared::schemas::row::{FIXED_LEN_SIZE, Row, RowCellValue};
 use shared::schemas::schema::{Schema, SchemaEntryId};
@@ -23,10 +24,10 @@ const OFFSET_SIZE: usize = 2;
 /// Maximum complete encoded row size (ROW-BIN-008).
 const MAX_ROW_SIZE: usize = 3_996;
 
-/// Errors that can occur during encoding and decoding rows
+/// Errors that can occur during the serialization of rows to binary
 #[derive(Debug, Error)]
-pub enum RowInterpreterError {
-    /// The schema violates the permitted column-count range.
+pub enum RowSerializationError {
+    /// The schema has an invalid number of columns
     #[error("schema must contain between 1 and 64 columns, got {count}")]
     InvalidColumnCount {
         /// Number of schema columns.
@@ -38,12 +39,9 @@ pub enum RowInterpreterError {
         /// ID referenced by multiple cells.
         schema_entry_id: SchemaEntryId,
     },
-    /// The complete encoded row exceeds the storage limit.
-    #[error("encoded row exceeds the maximum size of {max_size} bytes")]
-    RowTooLarge {
-        /// Maximum permitted encoded row size.
-        max_size: usize,
-    },
+    /// The complete encoded row exceeds the maximum size a row can have
+    #[error("encoded row exceeds the maximum size of {} bytes", MAX_ROW_SIZE)]
+    RowTooLarge,
     /// The row references a schema entry that is not present in the provided schema.
     #[error(
         "row cell references schema entry {schema_entry_id:?}, but that entry is not present in the provided schema"
@@ -82,12 +80,41 @@ pub enum RowInterpreterError {
     /// An error occurred while performing binary operations on the row
     #[error("Error while performing binary operations: {0}")]
     Binary(#[from] BinaryError),
-    /// Mismatch between expected and actual row size
-    #[error("Mismatch between expected and actual row size")]
+}
+
+/// Errors that can occur during the serialization of a row from binary.
+#[derive(Debug, Error)]
+pub enum RowDeserializationError {
+    /// The unused bits from the NULL bitmap (from schema.len()..64) are set instead of 0
+    #[error("unused NULL bitmap bits must be zero")]
+    InvalidNullBitmap,
+    /// String end offsets decrease or exceed the available string data.
+    #[error("string offsets must be nondecreasing and within the string data")]
+    InvalidStringOffsets,
+    /// Bytes remain after the final string end offset.
+    #[error("row contains bytes beyond the string data")]
+    TrailingStringData,
+    /// A column marked as NULL contains a nonzero integer or a nonempty string.
+    #[error("column {column_id} is marked as NULL but contains data")]
+    InvalidNullColumn {
+        /// ID of the column with an invalid NULL representation.
+        column_id: ObjectId,
+    },
+    /// Header column counts differ from the supplied schema.
+    #[error("header column counts must match the schema")]
+    MismatchedColumnCounts,
+    /// The complete encoded row exceeds the maximum size a row can have
+    #[error("encoded row exceeds the maximum size of {} bytes", MAX_ROW_SIZE)]
+    RowTooLarge,
+    /// An error occurred while performing binary operations on the row
+    #[error("Error while performing binary operations: {0}")]
+    Binary(#[from] BinaryError),
+    /// The length of the supplied bytes does not match what is declared in the header.
+    #[error("Invalid row size: expected {expected} bytes (from header), got {actual} bytes")]
     MismatchedSize {
-        /// Expected size of row
+        /// Size in bytes read from the header of the row
         expected: usize,
-        /// Actual size of row
+        /// Actual number of supplied bytes.
         actual: usize,
     },
     /// Error while trying to deserialize an integer column from the binary array of a row
@@ -126,7 +153,7 @@ struct RowMetadata {
 }
 
 /// Encode the provided `Row` of the provided `Schema` into a raw byte array.
-pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterError> {
+pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowSerializationError> {
     let metadata = validate_before_serialization(row, schema)?;
     let mut result_bytes: Vec<u8> = vec![0u8; metadata.row_size_bytes];
 
@@ -145,7 +172,7 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowInterpreterEr
 }
 
 /// Decodes a raw binary array into a `Row` of the provided `Schema`.
-pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterError> {
+pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowDeserializationError> {
     let metadata = validate_before_deserialization(bytes, schema)?;
 
     // Read NULL bitmap
@@ -154,6 +181,10 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
         let null_bitmap_start = HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE;
         let null_bitmap_value =
             shared::binary_helpers::le::read_le::<u64>(bytes, null_bitmap_start)?;
+        let column_count = schema.columns().len();
+        if column_count < 64 && null_bitmap_value >> column_count != 0 {
+            return Err(RowDeserializationError::InvalidNullBitmap);
+        }
         bitmap = Bitmap::from_u64(null_bitmap_value);
     }
 
@@ -167,7 +198,10 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
                 bytes,
                 integers_start_offset + i * FIXED_LEN_SIZE,
             )
-            .map_err(|source| RowInterpreterError::IntegerDeserialization { index: i, source })?;
+            .map_err(|source| RowDeserializationError::IntegerDeserialization {
+                index: i,
+                source,
+            })?;
             integers.push(value);
         }
     }
@@ -180,7 +214,7 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
             HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE;
         // this is where the string blob starts
         let string_blob_start = offsets_array_start + metadata.nb_var * OFFSET_SIZE;
-        // the position to which we currently read in the string blob (basically, the end index of the previous string we just read) - starts the the start of the blob since we did not read anything yet
+        // the position to which we currently read in the string blob (basically, the end index of the previous string we just read) - starts at the start of the blob since we did not read anything yet
         let mut cursor_for_already_read_strings = string_blob_start;
         for i in 0..metadata.nb_var {
             // where the offsets array tells us the current string ends
@@ -188,9 +222,8 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
                 bytes,
                 offsets_array_start + i * OFFSET_SIZE,
             )
-            .map_err(|source| RowInterpreterError::StringOffsetDeserialization {
-                index: i,
-                source,
+            .map_err(|source| {
+                RowDeserializationError::StringOffsetDeserialization { index: i, source }
             })?;
 
             // make it usize
@@ -199,25 +232,25 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
             // we must read from the end of the previous string (stored in `cursor_for_current_string`) to the offset from the array
             // the value from the array must be added to the start of the string blob (always) to get the real end offset within the main byte array
             // if, however, the current string ends at the same offset as the previous, then we know it's either an empty string or NULL - we will determine that later.
-            let string = if cursor_for_already_read_strings
-                == string_blob_start + end_offset_of_current_string
-            {
-                ""
-            } else {
-                match str::from_utf8(
-                    &bytes[cursor_for_already_read_strings
-                        ..string_blob_start + end_offset_of_current_string],
-                ) {
-                    Ok(s) => s,
-                    Err(source) => {
-                        return Err(RowInterpreterError::StringDeserialization { index: i, source });
-                    }
-                }
-            };
+            let end = string_blob_start + end_offset_of_current_string;
+
+            // Checked slicing rejects decreasing offsets and offsets beyond the blob.
+            let string_bytes = bytes
+                .get(cursor_for_already_read_strings..end)
+                .ok_or(RowDeserializationError::InvalidStringOffsets)?;
+
+            // At this point, both NULL values and actual empty strings values will produce an empty string in this array
+            // we will determine later one which one is it using the bitmap
+            let string = str::from_utf8(string_bytes).map_err(|source| {
+                RowDeserializationError::StringDeserialization { index: i, source }
+            })?;
 
             strings.push(string);
             // update the cursor
             cursor_for_already_read_strings = string_blob_start + end_offset_of_current_string;
+        }
+        if cursor_for_already_read_strings != bytes.len() {
+            return Err(RowDeserializationError::TrailingStringData);
         }
     }
 
@@ -230,7 +263,13 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
         .collect();
     fixed_columns.sort_by_key(|(_, e)| e.position());
     for (i, (_, entry)) in fixed_columns.iter().enumerate() {
-        let value = if bitmap.check(i) {
+        let value = if bitmap.check(entry.position()) {
+            // expected a NULL at this position, but the array stores non-zero bytes. error !
+            if integers[i] != 0 {
+                return Err(RowDeserializationError::InvalidNullColumn {
+                    column_id: entry.id().column_id(),
+                });
+            }
             RowCellValue::NULL
         } else {
             RowCellValue::Int(integers[i])
@@ -238,14 +277,20 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowInterpreterE
         builder = builder.cell(entry, value);
     }
 
-    let mut string_colums: Vec<_> = schema
+    let mut string_columns: Vec<_> = schema
         .columns()
         .iter()
         .filter(|(_, s)| !s.is_fixed_size())
         .collect();
-    string_colums.sort_by_key(|(_, e)| e.position());
-    for (i, (_, entry)) in string_colums.iter().enumerate() {
-        let value = if bitmap.check(i) {
+    string_columns.sort_by_key(|(_, e)| e.position());
+    for (i, (_, entry)) in string_columns.iter().enumerate() {
+        let value = if bitmap.check(entry.position()) {
+            // we were expecting a null string
+            if !strings[i].is_empty() {
+                return Err(RowDeserializationError::InvalidNullColumn {
+                    column_id: entry.id().column_id(),
+                });
+            }
             RowCellValue::NULL
         } else {
             RowCellValue::String(strings[i].to_string())
@@ -262,7 +307,7 @@ fn fill_in_strings(
     metadata: &RowMetadata,
     row: &Row,
     schema: &Schema,
-) -> Result<(), RowInterpreterError> {
+) -> Result<(), RowSerializationError> {
     let mut string_schema_entries: Vec<_> = schema
         .columns()
         .iter()
@@ -284,7 +329,7 @@ fn fill_in_strings(
     for (index, entry) in string_schema_entries.iter().enumerate() {
         let row_cell =
             row.get(&entry.id())
-                .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell {
+                .ok_or(RowSerializationError::MissingSchemaEntryForRowCell {
                     schema_entry_id: entry.id(),
                 })?;
 
@@ -292,7 +337,7 @@ fn fill_in_strings(
             RowCellValue::String(s) => s,
             RowCellValue::NULL => "",
             RowCellValue::Int(_) => {
-                return Err(RowInterpreterError::MismatchedTypes {
+                return Err(RowSerializationError::MismatchedTypes {
                     expected: DataType::String,
                     found: DataType::Int,
                 });
@@ -321,7 +366,7 @@ fn fill_in_fixed_sized_columns(
     vec: &mut [u8],
     row: &Row,
     schema: &Schema,
-) -> Result<usize, RowInterpreterError> {
+) -> Result<usize, RowSerializationError> {
     let mut fixed_sized_schema_entries: Vec<_> = schema
         .columns()
         .iter()
@@ -336,7 +381,7 @@ fn fill_in_fixed_sized_columns(
     let needed_size = base_index + fixed_sized_schema_entries.len() * FIXED_LEN_SIZE;
 
     if vec.len() < needed_size {
-        return Err(RowInterpreterError::BufferTooSmall {
+        return Err(RowSerializationError::BufferTooSmall {
             needed: needed_size,
             actual: vec.len(),
         });
@@ -345,14 +390,14 @@ fn fill_in_fixed_sized_columns(
     for (index, entry) in fixed_sized_schema_entries.iter().enumerate() {
         let row_cell =
             row.get(&entry.id())
-                .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell {
+                .ok_or(RowSerializationError::MissingSchemaEntryForRowCell {
                     schema_entry_id: entry.id(),
                 })?;
         let value = match row_cell.value() {
             RowCellValue::Int(v) => *v,
             RowCellValue::NULL => 0,
             RowCellValue::String(_) => {
-                return Err(RowInterpreterError::MismatchedTypes {
+                return Err(RowSerializationError::MismatchedTypes {
                     expected: DataType::Int,
                     found: DataType::String,
                 });
@@ -369,9 +414,9 @@ fn fill_in_fixed_sized_columns(
 fn fill_in_row_header(
     vec: &mut [u8],
     row_metadata: &RowMetadata,
-) -> Result<(), RowInterpreterError> {
+) -> Result<(), RowSerializationError> {
     if vec.len() < HEADER_SIZE {
-        return Err(RowInterpreterError::BufferTooSmall {
+        return Err(RowSerializationError::BufferTooSmall {
             needed: HEADER_SIZE,
             actual: vec.len(),
         });
@@ -395,12 +440,12 @@ fn fill_in_null_bitmap(
     row_metadata: &RowMetadata,
     row: &Row,
     schema: &Schema,
-) -> Result<(), RowInterpreterError> {
+) -> Result<(), RowSerializationError> {
     let mut bitmap = Bitmap::new();
     for (index, entry) in schema.columns_sorted().enumerate() {
         let value =
             row.get(&entry.id())
-                .ok_or(RowInterpreterError::MissingRowCellForSchemaEntry {
+                .ok_or(RowSerializationError::MissingRowCellForSchemaEntry {
                     schema_entry_id: entry.id(),
                 })?;
 
@@ -429,7 +474,7 @@ fn fill_in_null_bitmap(
 ///
 /// ## Returns
 /// - `RowMetadata' filled in if successful, error otherwise
-fn compute_metadata(row: &Row, schema: &Schema) -> Result<RowMetadata, RowInterpreterError> {
+fn compute_metadata(row: &Row, schema: &Schema) -> Result<RowMetadata, RowSerializationError> {
     let size = compute_row_size_in_bytes(row, schema)?;
 
     let nb_fixed_cols = schema
@@ -451,13 +496,13 @@ fn compute_metadata(row: &Row, schema: &Schema) -> Result<RowMetadata, RowInterp
     })
 }
 
-fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInterpreterError> {
+fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowSerializationError> {
     // start with the minimum we know we will have - the header and the bitmap
     let mut total = HEADER_SIZE + NULL_BITMAP_SIZE;
 
     for cell in row.values() {
         let schema_entry = schema.columns().get(&cell.schema_entry_id()).ok_or(
-            RowInterpreterError::MissingSchemaEntryForRowCell {
+            RowSerializationError::MissingSchemaEntryForRowCell {
                 schema_entry_id: cell.schema_entry_id(),
             },
         )?;
@@ -470,9 +515,7 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInt
                 RowCellValue::String(s) => {
                     // Bound the length before adding the offset bytes.
                     if s.len() > MAX_ROW_SIZE {
-                        return Err(RowInterpreterError::RowTooLarge {
-                            max_size: MAX_ROW_SIZE,
-                        });
+                        return Err(RowSerializationError::RowTooLarge);
                     }
                     // add both its actual length
                     // and two bytes for the offsets array
@@ -483,7 +526,7 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInt
                     OFFSET_SIZE
                 }
                 RowCellValue::Int(_) => {
-                    return Err(RowInterpreterError::MismatchedTypes {
+                    return Err(RowSerializationError::MismatchedTypes {
                         expected: DataType::String,
                         found: DataType::Int,
                     });
@@ -492,9 +535,7 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowInt
         };
         total += cell_size;
         if total > MAX_ROW_SIZE {
-            return Err(RowInterpreterError::RowTooLarge {
-                max_size: MAX_ROW_SIZE,
-            });
+            return Err(RowSerializationError::RowTooLarge);
         }
     }
 
@@ -511,10 +552,10 @@ fn get_null_bitmap_start(row_metadata: &RowMetadata) -> usize {
 fn validate_before_serialization(
     row: &Row,
     schema: &Schema,
-) -> Result<RowMetadata, RowInterpreterError> {
+) -> Result<RowMetadata, RowSerializationError> {
     let count = schema.columns().len();
     if count == 0 || count > 64 {
-        return Err(RowInterpreterError::InvalidColumnCount { count });
+        return Err(RowSerializationError::InvalidColumnCount { count });
     }
 
     let mut seen = HashSet::new();
@@ -523,19 +564,19 @@ fn validate_before_serialization(
         let entry = schema
             .columns()
             .get(&schema_entry_id)
-            .ok_or(RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id })?;
+            .ok_or(RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id })?;
         if !seen.insert(schema_entry_id) {
-            return Err(RowInterpreterError::DuplicateRowCell { schema_entry_id });
+            return Err(RowSerializationError::DuplicateRowCell { schema_entry_id });
         }
         match (entry.data_type(), cell.value()) {
             (DataType::Int, RowCellValue::String(_)) => {
-                return Err(RowInterpreterError::MismatchedTypes {
+                return Err(RowSerializationError::MismatchedTypes {
                     expected: DataType::Int,
                     found: DataType::String,
                 });
             }
             (DataType::String, RowCellValue::Int(_)) => {
-                return Err(RowInterpreterError::MismatchedTypes {
+                return Err(RowSerializationError::MismatchedTypes {
                     expected: DataType::String,
                     found: DataType::Int,
                 });
@@ -547,7 +588,7 @@ fn validate_before_serialization(
 
     for entry in schema.columns().values() {
         if row.get(&entry.id()).is_none() {
-            return Err(RowInterpreterError::MissingRowCellForSchemaEntry {
+            return Err(RowSerializationError::MissingRowCellForSchemaEntry {
                 schema_entry_id: entry.id(),
             });
         }
@@ -558,12 +599,10 @@ fn validate_before_serialization(
 
 fn validate_before_deserialization(
     bytes: &[u8],
-    _: &Schema,
-) -> Result<RowMetadata, RowInterpreterError> {
+    schema: &Schema,
+) -> Result<RowMetadata, RowDeserializationError> {
     if bytes.len() > MAX_ROW_SIZE {
-        return Err(RowInterpreterError::RowTooLarge {
-            max_size: MAX_ROW_SIZE,
-        });
+        return Err(RowDeserializationError::RowTooLarge);
     }
 
     // extract row size from header - stored as a u16 - then convert it to desired usize
@@ -572,7 +611,7 @@ fn validate_before_deserialization(
     // Ensure the declared row size in the header matches the actual length of the byte array
     {
         if row_size_bytes != bytes.len() {
-            return Err(RowInterpreterError::MismatchedSize {
+            return Err(RowDeserializationError::MismatchedSize {
                 expected: row_size_bytes,
                 actual: bytes.len(),
             });
@@ -581,6 +620,25 @@ fn validate_before_deserialization(
 
     let nb_fixed = usize::from(shared::binary_helpers::le::read_le::<u16>(bytes, 2)?);
     let nb_var = usize::from(shared::binary_helpers::le::read_le::<u16>(bytes, 4)?);
+
+    let expected_fixed = schema
+        .columns()
+        .values()
+        .filter(|entry| entry.is_fixed_size())
+        .count();
+    let expected_var = schema.columns().len() - expected_fixed;
+    if nb_fixed != expected_fixed || nb_var != expected_var {
+        return Err(RowDeserializationError::MismatchedColumnCounts);
+    }
+
+    let minimum_size =
+        HEADER_SIZE + nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE + nb_var * OFFSET_SIZE;
+    if bytes.len() < minimum_size {
+        return Err(RowDeserializationError::MismatchedSize {
+            expected: minimum_size,
+            actual: bytes.len(),
+        });
+    }
 
     Ok(RowMetadata {
         row_size_bytes,
@@ -608,7 +666,7 @@ mod api_tests {
             }
             assert!(matches!(
                 to_binary(&builder.build(), &schema),
-                Err(RowInterpreterError::MissingRowCellForSchemaEntry { schema_entry_id })
+                Err(RowSerializationError::MissingRowCellForSchemaEntry { schema_entry_id })
                     if schema_entry_id == entry_named(&schema, missing).id()
             ));
         }
@@ -628,7 +686,7 @@ mod api_tests {
             let row = Row::builder(&other_schema).value(column, 1).build();
             assert!(matches!(
                 to_binary(&row, &schema),
-                Err(RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id })
+                Err(RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id })
                     if schema_entry_id == entry_named(&other_schema, "value").id()
             ));
         }
@@ -648,14 +706,14 @@ mod api_tests {
         let string_row = Row::builder(&strings).value(7, "one").build();
         assert!(matches!(
             to_binary(&int_row, &strings),
-            Err(RowInterpreterError::MismatchedTypes {
+            Err(RowSerializationError::MismatchedTypes {
                 expected: DataType::String,
                 found: DataType::Int,
             })
         ));
         assert!(matches!(
             to_binary(&string_row, &ints),
-            Err(RowInterpreterError::MismatchedTypes {
+            Err(RowSerializationError::MismatchedTypes {
                 expected: DataType::Int,
                 found: DataType::String,
             })
@@ -685,10 +743,7 @@ mod api_tests {
                 assert_eq!(&bytes[..2], &3_996u16.to_le_bytes());
                 assert_eq!(&bytes[22..], text.as_bytes());
             } else {
-                assert!(matches!(
-                    result,
-                    Err(RowInterpreterError::RowTooLarge { max_size: 3_996 })
-                ));
+                assert!(matches!(result, Err(RowSerializationError::RowTooLarge)));
             }
         }
         let huge_row = Row::builder(&schema)
@@ -698,7 +753,7 @@ mod api_tests {
             .build();
         assert!(matches!(
             to_binary(&huge_row, &schema),
-            Err(RowInterpreterError::RowTooLarge { .. })
+            Err(RowSerializationError::RowTooLarge)
         ));
     }
 
@@ -812,7 +867,7 @@ mod unit_tests {
         // assert
         assert!(matches!(
             error,
-            RowInterpreterError::BufferTooSmall {
+            RowSerializationError::BufferTooSmall {
                 needed,
                 actual
             } if actual == HEADER_SIZE - 1 && needed == HEADER_SIZE
@@ -884,7 +939,7 @@ mod unit_tests {
         // assert
         assert!(matches!(
             error,
-            RowInterpreterError::MissingSchemaEntryForRowCell { schema_entry_id }
+            RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id }
                 if schema_entry_id == entry_named(&schema, "age").id()
         ));
     }
@@ -909,7 +964,7 @@ mod unit_tests {
         // assert
         assert!(matches!(
             error,
-            RowInterpreterError::BufferTooSmall { needed, actual }
+            RowSerializationError::BufferTooSmall { needed, actual }
                 if needed == HEADER_SIZE + 3 * FIXED_LEN_SIZE && actual == HEADER_SIZE + 3 * FIXED_LEN_SIZE - 1
         ));
     }

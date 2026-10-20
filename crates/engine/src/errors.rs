@@ -1,4 +1,4 @@
-use crate::row_interpreter::RowInterpreterError;
+use crate::row_interpreter::{RowDeserializationError, RowSerializationError};
 use thiserror::Error;
 
 /// Public error type for engine crate
@@ -6,5 +6,8 @@ use thiserror::Error;
 pub enum EngineError {
     /// Error while performing binary row interpretation
     #[error(transparent)]
-    RowInterpreter(#[from] RowInterpreterError),
+    RowSerialization(#[from] RowSerializationError),
+    /// Error while deserializing a binary row.
+    #[error(transparent)]
+    RowDeserialization(#[from] RowDeserializationError),
 }

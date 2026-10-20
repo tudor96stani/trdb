@@ -50,3 +50,7 @@ Follow the workspace lints in `Cargo.toml` and formatting settings in `rustfmt.t
 Start one server with `cargo run --bin trdb`, then start clients with `cargo run --bin trdbcmd`. The current server listens on `127.0.0.1:8080`.
 
 The server reads `trdb.toml` from the current working directory. Its required `[storage]` settings are `data_dir`, `logs_dir`, and a nonzero `buffer_pages`; the checked-in configuration uses `./DATA`, `./LOGS`, and 100 pages. Logs are application logs, not transactional write-ahead logs. Server startup currently sets up test data; use disposable data directories when exercising it. Keep generated database files, logs, and build artifacts out of changes.
+
+## Coding guidelines
+- avoid `static &str`
+- do not touch explanatory comments throughout the body of methods, unless the implementation no longer matches the comment, in which case the comment should be updated. never removed
