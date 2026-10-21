@@ -157,16 +157,107 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowSerialization
     let metadata = validate_before_serialization(row, schema)?;
     let mut result_bytes: Vec<u8> = vec![0u8; metadata.row_size_bytes];
 
-    fill_in_row_header(&mut result_bytes, &metadata)?;
+    let values = [
+        metadata.row_size_bytes.to_u16()?,
+        metadata.nb_fixed.to_u16()?,
+        metadata.nb_var.to_u16()?,
+    ];
+    for (index, value) in values.iter().enumerate() {
+        result_bytes[index * 2..index * 2 + 2].copy_from_slice(&value.to_le_bytes());
+    }
 
     // Populate fixed sized columns
-    fill_in_fixed_sized_columns(&mut result_bytes, row, schema)?;
+    let mut fixed_sized_schema_entries: Vec<_> = schema
+        .columns()
+        .iter()
+        .filter(|(_, entry)| entry.is_fixed_size())
+        .map(|(_, entry)| entry)
+        .collect();
+    fixed_sized_schema_entries.sort_by_key(|entry| entry.position());
+    // The fixed sized columns start from this index
+    let base_index = HEADER_SIZE;
+    for (index, entry) in fixed_sized_schema_entries.iter().enumerate() {
+        let row_cell =
+            row.get(&entry.id())
+                .ok_or(RowSerializationError::MissingSchemaEntryForRowCell {
+                    schema_entry_id: entry.id(),
+                })?;
+        let value = match row_cell.value() {
+            RowCellValue::Int(value) => *value,
+            RowCellValue::NULL => 0,
+            RowCellValue::String(_) => {
+                return Err(RowSerializationError::MismatchedTypes {
+                    expected: DataType::Int,
+                    found: DataType::String,
+                });
+            }
+        };
+        // Start writing this integer at base + all previous integers
+        let start_offset = base_index + index * FIXED_LEN_SIZE;
+        result_bytes[start_offset..start_offset + FIXED_LEN_SIZE]
+            .copy_from_slice(&value.to_le_bytes());
+    }
 
     // Populate null bitmap
-    fill_in_null_bitmap(&mut result_bytes, &metadata, row, schema)?;
+    let mut bitmap = Bitmap::new();
+    for (index, entry) in schema.columns_sorted().enumerate() {
+        let value =
+            row.get(&entry.id())
+                .ok_or(RowSerializationError::MissingRowCellForSchemaEntry {
+                    schema_entry_id: entry.id(),
+                })?;
+        if matches!(value.value(), RowCellValue::NULL) {
+            bitmap.set(index);
+        }
+    }
+    let bitmap_bytes = bitmap.to_bytes()?;
+    let bitmap_start = HEADER_SIZE + FIXED_LEN_SIZE * metadata.nb_fixed;
+    result_bytes[bitmap_start..bitmap_start + NULL_BITMAP_SIZE].copy_from_slice(&bitmap_bytes);
 
     // Populate var len offsets array
-    fill_in_strings(&mut result_bytes, &metadata, row, schema)?;
+    let mut string_schema_entries: Vec<_> = schema
+        .columns()
+        .iter()
+        .filter(|(_, entry)| !entry.is_fixed_size())
+        .map(|(_, entry)| entry)
+        .collect();
+    string_schema_entries.sort_by_key(|entry| entry.position());
+    // this is where the offsets array will start - used to know where to write the offset in the byte array. virtual/relative index, not actual position in the main byte array
+    let offsets_array_base_index =
+        HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE;
+    // this index is used to track what is the end offset (relative to the start of the array of offsets) for the column we are currently tracking.
+    let mut offsets_array_collector_index = 0;
+    // this is where we will write the actual strings (initialized to the place where we will write the first string, updated by the loop as more string are added). concrete index, actual position in the main byte array
+    let mut string_blob_collector = offsets_array_base_index + metadata.nb_var * OFFSET_SIZE;
+    for (index, entry) in string_schema_entries.iter().enumerate() {
+        let row_cell =
+            row.get(&entry.id())
+                .ok_or(RowSerializationError::MissingSchemaEntryForRowCell {
+                    schema_entry_id: entry.id(),
+                })?;
+        let string_value = match row_cell.value() {
+            RowCellValue::String(value) => value,
+            RowCellValue::NULL => "",
+            RowCellValue::Int(_) => {
+                return Err(RowSerializationError::MismatchedTypes {
+                    expected: DataType::String,
+                    found: DataType::Int,
+                });
+            }
+        };
+        // First let's write the entry in the array
+        let offset_starting_index = offsets_array_base_index + index * OFFSET_SIZE;
+        // Since this string will be placed right after the previous one, we take the previous end offset we had and add this one's size (first run collector will be 0)
+        let offset_to_write = (offsets_array_collector_index + string_value.len()).to_u16()?;
+        result_bytes[offset_starting_index..offset_starting_index + OFFSET_SIZE]
+            .copy_from_slice(&offset_to_write.to_le_bytes());
+        offsets_array_collector_index += string_value.len();
+
+        // Now let's write the actual string
+        result_bytes[string_blob_collector..string_blob_collector + string_value.len()]
+            .copy_from_slice(string_value.as_bytes());
+        string_blob_collector += string_value.len();
+    }
 
     Ok(result_bytes)
 }
@@ -301,179 +392,6 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowDeserializat
     Ok(builder.build())
 }
 
-//region Fill in bytes
-fn fill_in_strings(
-    vec: &mut [u8],
-    metadata: &RowMetadata,
-    row: &Row,
-    schema: &Schema,
-) -> Result<(), RowSerializationError> {
-    let mut string_schema_entries: Vec<_> = schema
-        .columns()
-        .iter()
-        .filter(|(_, entry)| !entry.is_fixed_size())
-        .map(|(_, entry)| entry)
-        .collect();
-
-    string_schema_entries.sort_by_key(|e| e.position());
-
-    // this is where the offsets array will start - used to know where to write the offset in the byte array. virtual/relative index, not actual position in the main byte array
-    let offsets_array_base_index =
-        HEADER_SIZE + metadata.nb_fixed * FIXED_LEN_SIZE + NULL_BITMAP_SIZE;
-    // this index is used to track what is the end offset (relative to the start of the array of offsets) for the column we are currently tracking.
-    let mut offsets_array_collector_index = 0;
-
-    // this is where we will write the actual strings (initialized to the place where we will write the first string, updated by the loop as more string are added). concrete index, actual position in the main byte array
-    let mut string_blob_collector = offsets_array_base_index + metadata.nb_var * OFFSET_SIZE;
-
-    for (index, entry) in string_schema_entries.iter().enumerate() {
-        let row_cell =
-            row.get(&entry.id())
-                .ok_or(RowSerializationError::MissingSchemaEntryForRowCell {
-                    schema_entry_id: entry.id(),
-                })?;
-
-        let string_value = match row_cell.value() {
-            RowCellValue::String(s) => s,
-            RowCellValue::NULL => "",
-            RowCellValue::Int(_) => {
-                return Err(RowSerializationError::MismatchedTypes {
-                    expected: DataType::String,
-                    found: DataType::Int,
-                });
-            }
-        };
-
-        // First let's write the entry in the array
-        let offset_starting_index = offsets_array_base_index + index * OFFSET_SIZE;
-        // Since this string will be placed right after the previous one, we take the previous end offset we had and add this one's size (first run collector will be 0)
-        let offset_to_write = (offsets_array_collector_index + string_value.len()).to_u16()?;
-        vec[offset_starting_index..offset_starting_index + OFFSET_SIZE]
-            .copy_from_slice(&offset_to_write.to_le_bytes());
-        offsets_array_collector_index += string_value.len();
-
-        // Now let's write the actual string
-        vec[string_blob_collector..string_blob_collector + string_value.len()]
-            .copy_from_slice(string_value.as_bytes());
-        string_blob_collector += string_value.len()
-    }
-
-    Ok(())
-}
-
-/// Returns the end position of the fixed sized segment
-fn fill_in_fixed_sized_columns(
-    vec: &mut [u8],
-    row: &Row,
-    schema: &Schema,
-) -> Result<usize, RowSerializationError> {
-    let mut fixed_sized_schema_entries: Vec<_> = schema
-        .columns()
-        .iter()
-        .filter(|(_, entry)| entry.is_fixed_size())
-        .map(|(_, entry)| entry)
-        .collect();
-
-    fixed_sized_schema_entries.sort_by_key(|e| e.position());
-
-    // The fixed sized columns start from this index
-    let base_index: usize = HEADER_SIZE;
-    let needed_size = base_index + fixed_sized_schema_entries.len() * FIXED_LEN_SIZE;
-
-    if vec.len() < needed_size {
-        return Err(RowSerializationError::BufferTooSmall {
-            needed: needed_size,
-            actual: vec.len(),
-        });
-    }
-
-    for (index, entry) in fixed_sized_schema_entries.iter().enumerate() {
-        let row_cell =
-            row.get(&entry.id())
-                .ok_or(RowSerializationError::MissingSchemaEntryForRowCell {
-                    schema_entry_id: entry.id(),
-                })?;
-        let value = match row_cell.value() {
-            RowCellValue::Int(v) => *v,
-            RowCellValue::NULL => 0,
-            RowCellValue::String(_) => {
-                return Err(RowSerializationError::MismatchedTypes {
-                    expected: DataType::Int,
-                    found: DataType::String,
-                });
-            }
-        };
-        // Start writing this integer at base + all previous integers
-        let start_offset = base_index + index * FIXED_LEN_SIZE;
-        vec[start_offset..start_offset + FIXED_LEN_SIZE].copy_from_slice(&value.to_le_bytes())
-    }
-
-    Ok(needed_size)
-}
-
-fn fill_in_row_header(
-    vec: &mut [u8],
-    row_metadata: &RowMetadata,
-) -> Result<(), RowSerializationError> {
-    if vec.len() < HEADER_SIZE {
-        return Err(RowSerializationError::BufferTooSmall {
-            needed: HEADER_SIZE,
-            actual: vec.len(),
-        });
-    }
-
-    let values = [
-        row_metadata.row_size_bytes.to_u16()?,
-        row_metadata.nb_fixed.to_u16()?,
-        row_metadata.nb_var.to_u16()?,
-    ];
-
-    for (index, value) in values.iter().enumerate() {
-        vec[index * 2..index * 2 + 2].copy_from_slice(&value.to_le_bytes());
-    }
-
-    Ok(())
-}
-
-fn fill_in_null_bitmap(
-    result_bytes: &mut [u8],
-    row_metadata: &RowMetadata,
-    row: &Row,
-    schema: &Schema,
-) -> Result<(), RowSerializationError> {
-    let mut bitmap = Bitmap::new();
-    for (index, entry) in schema.columns_sorted().enumerate() {
-        let value =
-            row.get(&entry.id())
-                .ok_or(RowSerializationError::MissingRowCellForSchemaEntry {
-                    schema_entry_id: entry.id(),
-                })?;
-
-        match value.value() {
-            RowCellValue::NULL => {
-                bitmap.set(index);
-            }
-            RowCellValue::Int(_) | RowCellValue::String(_) => {
-                continue;
-            }
-        }
-    }
-
-    let bitmap_bytes = bitmap.to_bytes()?;
-
-    let bitmap_start = get_null_bitmap_start(row_metadata);
-
-    result_bytes[bitmap_start..bitmap_start + NULL_BITMAP_SIZE].copy_from_slice(&bitmap_bytes);
-
-    Ok(())
-}
-//endregion
-
-//region Metadata
-/// Creates a `RowMetadata` value for the provided row.
-///
-/// ## Returns
-/// - `RowMetadata' filled in if successful, error otherwise
 fn compute_metadata(row: &Row, schema: &Schema) -> Result<RowMetadata, RowSerializationError> {
     let size = compute_row_size_in_bytes(row, schema)?;
 
@@ -541,14 +459,7 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowSer
 
     Ok(total)
 }
-/// Returns the position in the byte array of the NULL bitmap
-fn get_null_bitmap_start(row_metadata: &RowMetadata) -> usize {
-    HEADER_SIZE + FIXED_LEN_SIZE * row_metadata.nb_fixed
-}
 
-//endregion
-
-//region validators
 fn validate_before_serialization(
     row: &Row,
     schema: &Schema,
@@ -647,343 +558,338 @@ fn validate_before_deserialization(
     })
 }
 
-//endregion
-
 #[cfg(test)]
-mod api_tests {
-    use super::test_helpers::*;
+mod test_cases {
     use super::*;
+    use crate::row_interpreter::test_helpers::{
+        create_row, create_schema, encoded_row_with_value_7_and_label_hi, entry_named,
+        schema_with_int_value_and_string_label,
+    };
 
+    fn hex(s: &str) -> Vec<u8> {
+        s.split_whitespace()
+            .map(|byte| u8::from_str_radix(byte, 16).unwrap())
+            .collect()
+    }
+
+    // TC-ROW-SER-001 — Serialize valid rows, including NULL/empty distinction and UTF-8 lengths
     #[test]
-    fn serialization_rejects_missing_cells_including_null_columns() {
+    fn tc_row_ser_001_valid_rows() {
         let schema = create_schema();
-        for missing in ["id", "name", "age", "email"] {
-            let mut builder = Row::builder(&schema);
-            for entry in schema.columns_sorted() {
-                if entry.name() != missing {
-                    builder = builder.cell(entry, RowCellValue::NULL);
-                }
-            }
-            assert!(matches!(
-                to_binary(&builder.build(), &schema),
-                Err(RowSerializationError::MissingRowCellForSchemaEntry { schema_entry_id })
-                    if schema_entry_id == entry_named(&schema, missing).id()
-            ));
-        }
+        let row = create_row(&schema);
+        assert_eq!(
+            to_binary(&row, &schema).unwrap(),
+            hex(
+                "2B 00 02 00 02 00 01 00 00 00 19 00 00 00 00 00 00 00 00 00 00 00 04 00 11 00 4D 61 72 79 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D"
+            )
+        );
+
+        let row = Row::builder(&schema)
+            .value_named("id", 1)
+            .value_named("name", RowCellValue::NULL)
+            .value_named("age", 25)
+            .value_named("email", "")
+            .build();
+        assert_eq!(
+            to_binary(&row, &schema).unwrap(),
+            hex("1A 00 02 00 02 00 01 00 00 00 19 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00")
+        );
+
+        let row = Row::builder(&schema)
+            .value_named("id", 1)
+            .value_named("name", "é")
+            .value_named("age", 25)
+            .value_named("email", "")
+            .build();
+        assert_eq!(
+            to_binary(&row, &schema).unwrap(),
+            hex(
+                "1C 00 02 00 02 00 01 00 00 00 19 00 00 00 00 00 00 00 00 00 00 00 02 00 02 00 C3 A9"
+            )
+        );
     }
 
+    // TC-ROW-SER-002 — Reject rows with an invalid cell-to-schema correspondence
     #[test]
-    fn serialization_rejects_unknown_column_ids_and_owners() {
-        let schema = Schema::builder(1)
+    fn tc_row_ser_002_invalid_correspondence() {
+        let schema = create_schema();
+        let row = Row::builder(&schema)
+            .value(0, 1)
+            .value(2, 25)
+            .value(3, "x")
+            .build();
+        assert!(
+            matches!(to_binary(&row, &schema), Err(RowSerializationError::MissingRowCellForSchemaEntry { schema_entry_id }) if schema_entry_id == entry_named(&schema, "name").id())
+        );
+        let other = Schema::builder(2)
             .column(7, "value", DataType::Int, 0, false)
             .build()
             .unwrap();
-        for (owner, column) in [(1, 99), (2, 7)] {
-            let other_schema = Schema::builder(owner)
-                .column(column, "value", DataType::Int, 0, false)
-                .build()
-                .unwrap();
-            let row = Row::builder(&other_schema).value(column, 1).build();
-            assert!(matches!(
-                to_binary(&row, &schema),
-                Err(RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id })
-                    if schema_entry_id == entry_named(&other_schema, "value").id()
-            ));
-        }
+        let row = Row::builder(&other).value(7, 1).build();
+        assert!(
+            matches!(to_binary(&row, &schema), Err(RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id }) if schema_entry_id.owner_id() == 2 && schema_entry_id.column_id() == 7)
+        );
     }
 
+    // TC-ROW-SER-004 — Enforce the 3996-byte maximum row size
     #[test]
-    fn serialization_rejects_both_type_mismatches() {
-        let ints = Schema::builder(1)
-            .column(7, "value", DataType::Int, 0, false)
-            .build()
-            .unwrap();
-        let strings = Schema::builder(1)
-            .column(7, "value", DataType::String, 0, false)
-            .build()
-            .unwrap();
-        let int_row = Row::builder(&ints).value(7, 1).build();
-        let string_row = Row::builder(&strings).value(7, "one").build();
-        assert!(matches!(
-            to_binary(&int_row, &strings),
-            Err(RowSerializationError::MismatchedTypes {
-                expected: DataType::String,
-                found: DataType::Int,
-            })
-        ));
-        assert!(matches!(
-            to_binary(&string_row, &ints),
-            Err(RowSerializationError::MismatchedTypes {
-                expected: DataType::Int,
-                found: DataType::String,
-            })
-        ));
-    }
-
-    #[test]
-    fn serialization_enforces_complete_row_size_using_utf8_bytes() {
+    fn tc_row_ser_004_maximum_size() {
         let schema = Schema::builder(1)
             .column(7, "number", DataType::Int, 0, false)
             .column(99, "text", DataType::String, 1, false)
             .column(42, "empty", DataType::String, 2, false)
             .build()
             .unwrap();
-        // 22 bytes of header, integer, bitmap, and offsets; 3974 UTF-8 bytes.
-        let text = "é".repeat(1_987);
-        for extra in ["", "x"] {
-            let row = Row::builder(&schema)
-                .value(7, RowCellValue::NULL)
-                .value(99, format!("{text}{extra}"))
-                .value(42, RowCellValue::NULL)
-                .build();
-            let result = to_binary(&row, &schema);
-            if extra.is_empty() {
-                let bytes = result.unwrap();
-                assert_eq!(bytes.len(), 3_996);
-                assert_eq!(&bytes[..2], &3_996u16.to_le_bytes());
-                assert_eq!(&bytes[22..], text.as_bytes());
-            } else {
-                assert!(matches!(result, Err(RowSerializationError::RowTooLarge)));
-            }
-        }
-        let huge_row = Row::builder(&schema)
-            .value(7, 0)
-            .value(99, "x".repeat(65_536))
-            .value(42, "")
+        let text = "é".repeat(1987);
+        let row = Row::builder(&schema)
+            .value(7, RowCellValue::NULL)
+            .value(99, text.clone())
+            .value(42, RowCellValue::NULL)
+            .build();
+        let encoded = to_binary(&row, &schema).unwrap();
+        assert_eq!(encoded.len(), 3996);
+        assert_eq!(&encoded[..2], &[0x9C, 0x0F]);
+        assert_eq!(&encoded[22..], text.as_bytes());
+        let text = format!("{text}a");
+        let row = Row::builder(&schema)
+            .value(7, RowCellValue::NULL)
+            .value(99, text)
+            .value(42, RowCellValue::NULL)
             .build();
         assert!(matches!(
-            to_binary(&huge_row, &schema),
+            to_binary(&row, &schema),
             Err(RowSerializationError::RowTooLarge)
         ));
     }
 
+    // TC-ROW-SER-005 — Accept the maximum 64-column schema with every column NULL
     #[test]
-    fn serialization_accepts_64_null_columns_including_both_primary_key_types() {
+    fn tc_row_ser_005_64_null_columns() {
         let mut builder = Schema::builder(1);
         for position in 0..64 {
             builder = builder.column(
-                position as u16,
+                position,
                 format!("column_{position}"),
                 if position % 2 == 0 {
                     DataType::Int
                 } else {
                     DataType::String
                 },
-                position,
+                usize::from(position),
                 position < 2,
             );
         }
         let schema = builder.pk([0, 1]).build().unwrap();
-        let mut builder = Row::builder(&schema);
-        for entry in schema.columns_sorted() {
-            builder = builder.cell(entry, RowCellValue::NULL);
+        let mut row = Row::builder(&schema);
+        for position in 0..64 {
+            row = row.value(position, RowCellValue::NULL);
         }
-        let bytes = to_binary(&builder.build(), &schema).unwrap();
+        let bytes = to_binary(&row.build(), &schema).unwrap();
         assert_eq!(bytes.len(), 206);
-        assert_eq!(&bytes[..6], &[206, 0, 32, 0, 32, 0]);
-        assert!(bytes[6..134].iter().all(|byte| *byte == 0));
-        assert_eq!(&bytes[134..142], &[0xFF; 8]);
-        assert!(bytes[142..].iter().all(|byte| *byte == 0));
+        assert_eq!(&bytes[..6], &[0xCE, 0, 0x20, 0, 0x20, 0]);
+        assert!(bytes[6..134].iter().all(|b| *b == 0));
+        assert!(bytes[134..142].iter().all(|b| *b == 0xFF));
+        assert!(bytes[142..].iter().all(|b| *b == 0));
     }
 
+    // TC-ROW-DES-001 — Deserialize valid rows, including NULL/empty distinction and UTF-8 lengths
     #[test]
-    pub fn to_binary_returns_correct_byte_array() {
-        // arrange
+    fn tc_row_des_001_valid_rows() {
         let schema = create_schema();
-        let row = create_row(&schema);
-
-        // act
-        let bytes = to_binary(&row, &schema).unwrap();
-
-        // assert
-        // Expected layout (byte ranges are relative to the start of the row):
-        // | 0..6               | 6..14    | 14..22      | 22..26             | 26..43               |
-        // | header             | integers | NULL bitmap | string end offsets | string blob          |
-        // | size=43, I=2, S=2   | 1, 25    | 0           | 4, 17              | "Mary""mary@mail.com" |
-        // Numeric fields are little-endian. String end offsets are relative to
-        // the blob: "Mary" occupies 0..4 and "mary@mail.com" occupies 4..17.
-        let expected = [
-            0x2B, 0x00, 0x02, 0x00, 0x02, 0x00, // header: 43 bytes, 2 ints, 2 strings
-            0x01, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, // integers: 1, 25
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // NULL bitmap
-            0x04, 0x00, 0x11, 0x00, // string end offsets: 4, 17
-            0x4D, 0x61, 0x72, 0x79, // "Mary"
-            0x6D, 0x61, 0x72, 0x79, 0x40, 0x6D, 0x61, 0x69, 0x6C, 0x2E, 0x63, 0x6F,
-            0x6D, // "mary@mail.com"
-        ];
-        assert_eq!(bytes.as_slice(), &expected);
+        for (bytes, expected) in [
+            (
+                "2B 00 02 00 02 00 01 00 00 00 19 00 00 00 00 00 00 00 00 00 00 00 04 00 11 00 4D 61 72 79 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D",
+                vec!["1", "Mary", "25", "mary@mail.com"],
+            ),
+            (
+                "1A 00 02 00 02 00 01 00 00 00 19 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00",
+                vec!["1", "NULL", "25", ""],
+            ),
+            (
+                "1C 00 02 00 02 00 01 00 00 00 19 00 00 00 00 00 00 00 00 00 00 00 02 00 02 00 C3 A9",
+                vec!["1", "é", "25", ""],
+            ),
+        ] {
+            let row = from_binary(&hex(bytes), &schema).unwrap();
+            for (name, value) in ["id", "name", "age", "email"].into_iter().zip(expected) {
+                let cell = row.get(&entry_named(&schema, name).id()).unwrap();
+                match value {
+                    "NULL" => assert!(matches!(cell.value(), RowCellValue::NULL)),
+                    _ if name == "id" || name == "age" => assert!(
+                        matches!(cell.value(), RowCellValue::Int(actual) if *actual == value.parse::<i32>().unwrap())
+                    ),
+                    _ => assert!(
+                        matches!(cell.value(), RowCellValue::String(actual) if actual == value)
+                    ),
+                }
+            }
+        }
     }
-}
 
-#[cfg(test)]
-mod unit_tests {
-    use super::*;
-    use crate::row_interpreter::test_helpers::{
-        create_row, create_schema, create_schema_with_interleaved_fixed_columns, entry_named,
-    };
-    use shared::schemas::schema::Schema;
-
+    // TC-ROW-DES-002 — Round-trip is independent of row-cell insertion order
     #[test]
-    fn compute_row_size_in_bytes_returns_correct_size() {
-        // arrange
+    fn tc_row_des_002_order_independent_round_trip() {
         let schema = create_schema();
-        let row = create_row(&schema);
-
-        // act
-        let row_size = compute_row_size_in_bytes(&row, &schema).unwrap();
-
-        // assert
-        assert_eq!(row_size, 43);
+        let first = Row::builder(&schema)
+            .value(0, 1)
+            .value(1, "Mary")
+            .value(2, 25)
+            .value(3, "mary@mail.com")
+            .build();
+        let second = Row::builder(&schema)
+            .value(3, "mary@mail.com")
+            .value(2, 25)
+            .value(1, "Mary")
+            .value(0, 1)
+            .build();
+        let expected = hex(
+            "2B 00 02 00 02 00 01 00 00 00 19 00 00 00 00 00 00 00 00 00 00 00 04 00 11 00 4D 61 72 79 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D",
+        );
+        assert_eq!(to_binary(&first, &schema).unwrap(), expected);
+        assert_eq!(to_binary(&second, &schema).unwrap(), expected);
+        for row in [
+            from_binary(&to_binary(&first, &schema).unwrap(), &schema).unwrap(),
+            from_binary(&to_binary(&second, &schema).unwrap(), &schema).unwrap(),
+        ] {
+            assert!(matches!(
+                row.get(&entry_named(&schema, "id").id()).unwrap().value(),
+                RowCellValue::Int(1)
+            ));
+            assert!(
+                matches!(row.get(&entry_named(&schema, "name").id()).unwrap().value(), RowCellValue::String(value) if value == "Mary")
+            );
+            assert!(matches!(
+                row.get(&entry_named(&schema, "age").id()).unwrap().value(),
+                RowCellValue::Int(25)
+            ));
+            assert!(
+                matches!(row.get(&entry_named(&schema, "email").id()).unwrap().value(), RowCellValue::String(value) if value == "mary@mail.com")
+            );
+        }
     }
 
+    // TC-ROW-DES-003 — Reject malformed row framing
     #[test]
-    fn fill_in_row_header_writes_row_size_and_column_counts_as_little_endian_u16s() {
-        // arrange
-        let mut bytes = vec![0; HEADER_SIZE];
-        let metadata = RowMetadata {
-            row_size_bytes: 300,
-            nb_fixed: 3,
-            nb_var: 2,
-        };
-        // act
-        fill_in_row_header(&mut bytes, &metadata).unwrap();
-
-        // assert
-        assert_eq!(bytes, vec![44, 1, 3, 0, 2, 0]);
-    }
-
-    #[test]
-    fn fill_in_row_header_errors_when_buffer_is_too_small() {
-        // arrange
-        let mut bytes = vec![0; HEADER_SIZE - 1];
-        let metadata = RowMetadata {
-            row_size_bytes: 43,
-            nb_fixed: 2,
-            nb_var: 2,
-        };
-        // act
-        let error = fill_in_row_header(&mut bytes, &metadata).unwrap_err();
-
-        // assert
+    fn tc_row_des_003_malformed_framing() {
+        let schema = schema_with_int_value_and_string_label();
         assert!(matches!(
-            error,
-            RowSerializationError::BufferTooSmall {
-                needed,
-                actual
-            } if actual == HEADER_SIZE - 1 && needed == HEADER_SIZE
-
+            from_binary(&vec![0; 3997], &schema),
+            Err(RowDeserializationError::RowTooLarge)
+        ));
+        assert!(matches!(
+            from_binary(&[0], &schema),
+            Err(RowDeserializationError::Binary(_))
+        ));
+        let mut bytes = encoded_row_with_value_7_and_label_hi();
+        bytes[..2].copy_from_slice(&[0x17, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::MismatchedSize {
+                expected: 23,
+                actual: 22
+            })
+        ));
+        let mut bytes = encoded_row_with_value_7_and_label_hi();
+        bytes[2..4].copy_from_slice(&[2, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::MismatchedColumnCounts)
+        ));
+        let mut bytes = encoded_row_with_value_7_and_label_hi()[..18].to_vec();
+        bytes[..2].copy_from_slice(&[0x12, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::MismatchedSize {
+                expected: 20,
+                actual: 18
+            })
         ));
     }
 
+    // TC-ROW-DES-004 — Reject invalid NULL representations
     #[test]
-    fn fill_in_fixed_sized_columns_writes_ints_in_schema_position_order() {
-        // arrange
-        let schema = create_schema_with_interleaved_fixed_columns();
-        let row = Row::builder(&schema)
-            .value_named("score", -9)
-            .value_named("name", "Mary")
-            .value_named("id", 1)
-            .value_named("email", "mary@mail.com")
-            .value_named("age", 25)
-            .build();
-        let mut bytes = vec![0xAA; HEADER_SIZE + 3 * FIXED_LEN_SIZE + NULL_BITMAP_SIZE];
-
-        // act
-        fill_in_fixed_sized_columns(&mut bytes, &row, &schema).unwrap();
-
-        // assert
-        assert_eq!(&bytes[0..HEADER_SIZE], &[0xAA; HEADER_SIZE]);
-        assert_eq!(&bytes[6..10], &1i32.to_le_bytes());
-        assert_eq!(&bytes[10..14], &25i32.to_le_bytes());
-        assert_eq!(&bytes[14..18], &(-9i32).to_le_bytes());
-        assert_eq!(&bytes[18..], &[0xAA; NULL_BITMAP_SIZE]);
+    fn tc_row_des_004_invalid_null_representations() {
+        let schema = schema_with_int_value_and_string_label();
+        let mut bytes = encoded_row_with_value_7_and_label_hi();
+        bytes[10..18].copy_from_slice(&[4, 0, 0, 0, 0, 0, 0, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::InvalidNullBitmap)
+        ));
+        let mut bytes = encoded_row_with_value_7_and_label_hi();
+        bytes[10..18].copy_from_slice(&[1, 0, 0, 0, 0, 0, 0, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::InvalidNullColumn { column_id: 5 })
+        ));
+        let mut bytes = encoded_row_with_value_7_and_label_hi();
+        bytes[10..18].copy_from_slice(&[2, 0, 0, 0, 0, 0, 0, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::InvalidNullColumn { column_id: 6 })
+        ));
     }
 
+    // TC-ROW-DES-005 — Reject invalid string sections
     #[test]
-    fn fill_in_fixed_sized_columns_writes_zero_for_null_fixed_values() {
-        // arrange
-        let schema = Schema::builder(3)
-            .column(0, "id", DataType::Int, 0, true)
-            .column(1, "name", DataType::String, 1, false)
-            .pk([0])
+    fn tc_row_des_005_invalid_string_sections() {
+        let schema = Schema::builder(9)
+            .column(10, "first", DataType::String, 0, false)
+            .column(11, "second", DataType::String, 1, false)
             .build()
             .unwrap();
-        let row = Row::builder(&schema)
-            .value_named("id", RowCellValue::NULL)
-            .value_named("name", "Mary")
-            .build();
-        let mut bytes = vec![0; HEADER_SIZE + FIXED_LEN_SIZE + NULL_BITMAP_SIZE];
-
-        // act
-        fill_in_fixed_sized_columns(&mut bytes, &row, &schema).unwrap();
-
-        // assert
-        assert_eq!(&bytes[6..10], &0i32.to_le_bytes());
-    }
-
-    #[test]
-    fn fill_in_fixed_sized_columns_errors_when_row_is_missing_fixed_column() {
-        // arrange
-        let schema = create_schema_with_interleaved_fixed_columns();
-        let row = Row::builder(&schema)
-            .value_named("id", 1)
-            .value_named("name", "Mary")
-            .value_named("email", "mary@mail.com")
-            .value_named("score", -9)
-            .build();
-        let mut bytes = vec![0; HEADER_SIZE + 3 * FIXED_LEN_SIZE + NULL_BITMAP_SIZE];
-
-        // act
-        let error = fill_in_fixed_sized_columns(&mut bytes, &row, &schema).unwrap_err();
-
-        // assert
+        let baseline = hex("17 00 00 00 02 00 00 00 00 00 00 00 00 00 02 00 05 00 61 62 63 64 65");
+        assert_eq!(baseline.len(), 23);
+        let row = from_binary(&baseline, &schema).unwrap();
         assert!(matches!(
-            error,
-            RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id }
-                if schema_entry_id == entry_named(&schema, "age").id()
+            row.get(&schema.columns().values().find(|entry| entry.name() == "first").unwrap().id()).unwrap().value(),
+            RowCellValue::String(value) if value == "ab"
         ));
-    }
-
-    #[test]
-    fn fill_in_fixed_sized_columns_errors_when_buffer_is_too_small() {
-        // arrange
-        let schema = create_schema_with_interleaved_fixed_columns();
-        let row = Row::builder(&schema)
-            .value_named("id", 1)
-            .value_named("name", "Mary")
-            .value_named("age", 25)
-            .value_named("email", "mary@mail.com")
-            .value_named("score", -9)
-            .build();
-        let needed = HEADER_SIZE + 3 * FIXED_LEN_SIZE;
-        let mut bytes = vec![0; needed - 1];
-
-        // act
-        let error = fill_in_fixed_sized_columns(&mut bytes, &row, &schema).unwrap_err();
-
-        // assert
         assert!(matches!(
-            error,
-            RowSerializationError::BufferTooSmall { needed, actual }
-                if needed == HEADER_SIZE + 3 * FIXED_LEN_SIZE && actual == HEADER_SIZE + 3 * FIXED_LEN_SIZE - 1
+            row.get(&schema.columns().values().find(|entry| entry.name() == "second").unwrap().id()).unwrap().value(),
+            RowCellValue::String(value) if value == "cde"
         ));
-    }
 
-    #[test]
-    fn get_null_bitmap_start_returns_correct_value() {
-        // arrange
-        let metadata = RowMetadata {
-            row_size_bytes: 100,
-            nb_fixed: 6,
-            nb_var: 2,
-        };
+        let mut bytes = baseline.clone();
+        bytes[14..18].copy_from_slice(&[5, 0, 2, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::InvalidStringOffsets)
+        ));
+        let mut bytes = baseline.clone();
+        bytes[16..18].copy_from_slice(&[9, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::InvalidStringOffsets)
+        ));
+        let mut bytes = baseline;
+        bytes[16..18].copy_from_slice(&[3, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &schema),
+            Err(RowDeserializationError::TrailingStringData)
+        ));
 
-        // act
-        let result = get_null_bitmap_start(&metadata);
+        let one_string = Schema::builder(9)
+            .column(6, "label", DataType::String, 0, false)
+            .build()
+            .unwrap();
+        let bytes = hex("11 00 00 00 01 00 00 00 00 00 00 00 00 00 01 00 FF");
+        assert!(matches!(
+            from_binary(&bytes, &one_string),
+            Err(RowDeserializationError::StringDeserialization { index: 0, .. })
+        ));
 
-        // assert
-        assert_eq!(result, 30)
-        // this test is mostly to catch if the computation ever gets messed up or intentionally changed
+        let one_int = Schema::builder(9)
+            .column(5, "value", DataType::Int, 0, false)
+            .build()
+            .unwrap();
+        let mut bytes = hex("12 00 01 00 00 00 07 00 00 00 00 00 00 00 00 00 00 00");
+        bytes.push(0xAA);
+        bytes[..2].copy_from_slice(&[0x13, 0]);
+        assert!(matches!(
+            from_binary(&bytes, &one_int),
+            Err(RowDeserializationError::TrailingStringData)
+        ));
     }
 }
 
@@ -991,24 +897,29 @@ mod unit_tests {
 mod test_helpers {
     use super::*;
     use shared::schemas::schema::SchemaEntry;
+
+    pub(super) fn schema_with_int_value_and_string_label() -> Schema {
+        Schema::builder(9)
+            .column(5, "value", DataType::Int, 0, false)
+            .column(6, "label", DataType::String, 1, false)
+            .build()
+            .unwrap()
+    }
+
+    pub(super) fn encoded_row_with_value_7_and_label_hi() -> Vec<u8> {
+        [
+            0x16, 0x00, 0x01, 0x00, 0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x68, 0x69,
+        ]
+        .to_vec()
+    }
+
     pub(super) fn create_schema() -> Schema {
         Schema::builder(1)
             .column(0, "id", DataType::Int, 0, true)
             .column(1, "name", DataType::String, 1, false)
             .column(2, "age", DataType::Int, 2, false)
             .column(3, "email", DataType::String, 3, false)
-            .pk([0])
-            .build()
-            .unwrap()
-    }
-
-    pub(super) fn create_schema_with_interleaved_fixed_columns() -> Schema {
-        Schema::builder(2)
-            .column(0, "id", DataType::Int, 0, true)
-            .column(1, "name", DataType::String, 1, false)
-            .column(2, "age", DataType::Int, 2, false)
-            .column(3, "email", DataType::String, 3, false)
-            .column(4, "score", DataType::Int, 4, false)
             .pk([0])
             .build()
             .unwrap()

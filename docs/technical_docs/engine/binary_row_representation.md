@@ -101,7 +101,6 @@ The intended encoding is:
 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D    "mary@mail.com"
 ```
 
-This example describes the complete format. String-offset and string-data encoding are not yet implemented.
 
 ### NULL and empty string
 

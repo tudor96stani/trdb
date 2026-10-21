@@ -53,4 +53,4 @@ The server reads `trdb.toml` from the current working directory. Its required `[
 
 ## Coding guidelines
 - avoid `static &str`
-- do not touch explanatory comments throughout the body of methods, unless the implementation no longer matches the comment, in which case the comment should be updated. never removed
+- Preserve explanatory comments during refactors. When moving, extracting, or inlining code, carry over every explanatory comment that still describes the moved logic, keeping its wording unchanged and placing it beside the relevant code. Delete a comment only if the behavior it describes has changed so the comment is no longer true; update it in that case rather than silently removing it. Before finishing, review the diff specifically for deleted comments and restore any that still apply.
