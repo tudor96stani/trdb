@@ -2,13 +2,13 @@
 created: 2026-02-14
 ---
 
-The file manager translates page requests into file I/O. A `PageId` identifies a file and a page number; the catalog maps the file ID to a filesystem path, and the page number determines the byte offset. Each transfer reads or writes one whole 4096-byte page.
+The file manager translates page requests into file I/O. A `PageId` identifies a database, a file within it and a page number; the catalog maps the `(db_id, file_id)` pair to a filesystem path, and the page number determines the byte offset. Each transfer reads or writes one whole 4096-byte page.
 
 `FileManager` defines that interface, while `DiskFileManager` implements it with cached operating-system file handles and positional I/O. This keeps filesystem details below the buffer's page API.
 
 ## Catalog
 
-`FileCatalog` stores an `RwLock<HashMap<FileId, PathBuf>>`. `add_file()` inserts or replaces a path, and `get_file_name()` returns a cloned path or `None`.
+`FileCatalog` stores an `RwLock<HashMap<(DatabaseId, FileId), PathBuf>>`. File IDs are only unique within a database, so both are part of the key. `add_file()` inserts or replaces a path, and `get_file_name()` returns a cloned path or `None`.
 
 Path construction belongs outside the file manager. `DiskFileManager` opens the path supplied by the catalog, which stores each `PathBuf` as supplied. Relative paths resolve from the process's working directory.
 
@@ -25,11 +25,11 @@ Both expect a caller-provided buffer of exactly 4096 bytes.
 
 ## Opening a file
 
-A file handle is the operating-system resource returned by opening a file. `DiskFileManager` caches shared handles in `RwLock<HashMap<FileId, Arc<File>>>`, so subsequent page requests reuse the opened file.
+A file handle is the operating-system resource returned by opening a file. `DiskFileManager` caches shared handles in `RwLock<HashMap<(DatabaseId, FileId), Arc<File>>>`, so subsequent page requests reuse the opened file.
 
 1. We check for a cached handle under the map's read latch.
 2. On a miss, we take the write latch and check again in case another caller opened it.
-3. We ask the catalog for the path. A missing mapping returns `FilePathNotFound`.
+3. We ask the catalog for the path of `(db_id, file_id)`. A missing mapping returns `FilePathNotFound`.
 4. We create the parent directories and open the file with read, write and create enabled, without truncation.
 5. We cache the handle and return its `Arc`.
 
@@ -37,7 +37,7 @@ Existing content is retained, and a read can create a missing file. Directory-cr
 
 ## Reading a page
 
-The byte offset in the file is `page_number * 4096`. Page `(1, 2)` starts at byte 8192 of the file registered as ID 1.
+The byte offset in the file is `page_number * 4096`. Page `(1, 1, 2)` (database 1, file 1, page number 2) starts at byte 8192 of the file registered as ID 1 in database 1.
 
 1. We obtain the file handle.
 2. We perform one positional read into the destination slice.

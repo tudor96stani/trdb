@@ -8,7 +8,7 @@ We keep columns in a map keyed by their IDs and keep primary-key IDs in a separa
 
 ## Identifiers
 
-`ObjectId` is a `u16` identifying a database object. In a `SchemaEntryId`, the `owner_id` identifies the table or index and the `column_id` identifies a column within it. Equality and hashing use both. Column 0 of owner 1 is therefore different from column 0 of owner 2.
+In a `SchemaEntryId`, the `owner_id` is a plain `ObjectId` identifying the table or nonclustered index the schema belongs to, and the `column_id` is a `ColumnId` identifying a column within it. The owner stays an `ObjectId` because a schema can belong to either a table or an index, and we don't want an enum for that. Equality and hashing use both. Column 0 of owner 1 is therefore different from column 0 of owner 2. How the IDs are scoped and assigned is described in [identifiers](identifiers.md).
 
 Callers supply column IDs explicitly. They can assign them starting from 0 in definition order, but IDs do not have to equal positions or be contiguous.
 
@@ -27,16 +27,17 @@ A fixed-size type occupies the same number of bytes for every value. `is_fixed_s
 
 ## Building a schema
 
-The builder accepts raw column values, so callers do not have to construct the inner metadata structs.
+The builder takes `ColumnId` values and builds the `SchemaEntry` and `SchemaEntryId` structs itself, so callers do not have to construct them. The owner stays a raw `ObjectId`.
 
 ```rust
 use shared::schemas::data_type::DataType;
+use shared::schemas::identifiers::ColumnId;
 use shared::schemas::schema::Schema;
 
 let schema = Schema::builder(42)
-    .column(7, "name", DataType::String, 1, false)
-    .column(100, "id", DataType::Int, 0, true)
-    .pk([100])
+    .column(ColumnId::new(7), "name", DataType::String, 1, false)
+    .column(ColumnId::new(100), "id", DataType::Int, 0, true)
+    .pk([ColumnId::new(100)])
     .build()
     .expect("valid schema");
 ```

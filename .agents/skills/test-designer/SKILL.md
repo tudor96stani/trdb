@@ -12,7 +12,7 @@ Read `.agents/rules/testcases.md`, `.agents/rules/requirements.md`, and the rele
 - When given **requirements**, derive expected behavior from approved requirements. Do not inspect production code by default.
 - When given **code**, inspect the selected code and relevant approved requirements. Code may reveal useful scenarios but does not establish intended behavior.
 - When given **both**, design one integrated set of tests, not separate black-box and white-box suites.
-- Respect the user's specified files, modules, and depth. If unclear, ask one focused question at a time.
+- Respect the user's specified files, modules, and depth. If unclear, ask following the `grill-me` skill (`.agents/skills/grill-me/SKILL.md`).
 - Pending requirements are not authoritative unless the user explicitly authorizes provisional test design.
 
 ## Choose practical tests, not exhaustive coverage
@@ -40,7 +40,7 @@ Each test case must have one obvious purpose and enough information for another 
 - A single documented case may contain a few **closely related** variations, each fully specified. The implementer may use separate Rust test functions for clarity.
 - Avoid combining unrelated edge cases merely to cover more requirement IDs. Prefer failures that are easy to understand and diagnose.
 - Include only assertions relevant to the case's purpose; don't restate generic no-panic, unchanged-input, or error-context checks in every scenario unless those are what the case is testing.
-- Do not invent behavior from implementation details or general database conventions. Ask about material ambiguities one at a time.
+- Do not invent behavior from implementation details or general database conventions. Resolve material ambiguities with the user following `grill-me`.
 
 ## Review before proposing
 

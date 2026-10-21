@@ -4,8 +4,8 @@
 use shared::binary_helpers::bin_error::BinaryError;
 use shared::binary_helpers::bitmap::Bitmap;
 use shared::binary_helpers::conversions::{ConversionError, UsizeConversion};
-use shared::schemas::ObjectId;
 use shared::schemas::data_type::DataType;
+use shared::schemas::identifiers::ColumnId;
 use shared::schemas::row::{FIXED_LEN_SIZE, Row, RowCellValue};
 use shared::schemas::schema::{Schema, SchemaEntryId};
 use std::collections::HashSet;
@@ -113,7 +113,7 @@ pub enum RowDeserializationError {
     #[error("column {column_id} is marked as NULL but contains data")]
     InvalidNullColumn {
         /// ID of the column with an invalid NULL representation.
-        column_id: ObjectId,
+        column_id: ColumnId,
     },
     /// Header column counts differ from the supplied schema.
     #[error(
@@ -655,20 +655,20 @@ mod test_cases {
     fn tc_row_ser_002_invalid_correspondence() {
         let schema = create_schema();
         let row = Row::builder(&schema)
-            .value(0, 1)
-            .value(2, 25)
-            .value(3, "x")
+            .value(ColumnId::new(0), 1)
+            .value(ColumnId::new(2), 25)
+            .value(ColumnId::new(3), "x")
             .build();
         assert!(
             matches!(to_binary(&row, &schema), Err(RowSerializationError::MissingRowCellForSchemaEntry { schema_entry_id }) if schema_entry_id == entry_named(&schema, "name").id())
         );
         let other = Schema::builder(2)
-            .column(7, "value", DataType::Int, 0, false)
+            .column(ColumnId::new(7), "value", DataType::Int, 0, false)
             .build()
             .unwrap();
-        let row = Row::builder(&other).value(7, 1).build();
+        let row = Row::builder(&other).value(ColumnId::new(7), 1).build();
         assert!(
-            matches!(to_binary(&row, &schema), Err(RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id }) if schema_entry_id.owner_id() == 2 && schema_entry_id.column_id() == 7)
+            matches!(to_binary(&row, &schema), Err(RowSerializationError::MissingSchemaEntryForRowCell { schema_entry_id }) if schema_entry_id.owner_id() == 2 && schema_entry_id.column_id() == ColumnId::new(7))
         );
     }
 
@@ -684,14 +684,16 @@ mod test_cases {
         ] {
             // Equal identities in different schemas let us supply a value of the wrong type.
             let target = Schema::builder(17)
-                .column(42, "value", expected_type, 0, false)
+                .column(ColumnId::new(42), "value", expected_type, 0, false)
                 .build()
                 .unwrap();
             let source = Schema::builder(17)
-                .column(42, "value", supplied_type, 0, false)
+                .column(ColumnId::new(42), "value", supplied_type, 0, false)
                 .build()
                 .unwrap();
-            let row = Row::builder(&source).value(42, value).build();
+            let row = Row::builder(&source)
+                .value(ColumnId::new(42), value)
+                .build();
             let error = to_binary(&row, &target).unwrap_err();
             let target_entry = entry_named(&target, "value");
             let source_entry = entry_named(&source, "value");
@@ -723,16 +725,16 @@ mod test_cases {
     #[test]
     fn tc_row_ser_004_maximum_size() {
         let schema = Schema::builder(1)
-            .column(7, "number", DataType::Int, 0, false)
-            .column(99, "text", DataType::String, 1, false)
-            .column(42, "empty", DataType::String, 2, false)
+            .column(ColumnId::new(7), "number", DataType::Int, 0, false)
+            .column(ColumnId::new(99), "text", DataType::String, 1, false)
+            .column(ColumnId::new(42), "empty", DataType::String, 2, false)
             .build()
             .unwrap();
         let text = "é".repeat(1987);
         let row = Row::builder(&schema)
-            .value(7, RowCellValue::NULL)
-            .value(99, text.clone())
-            .value(42, RowCellValue::NULL)
+            .value(ColumnId::new(7), RowCellValue::NULL)
+            .value(ColumnId::new(99), text.clone())
+            .value(ColumnId::new(42), RowCellValue::NULL)
             .build();
         let encoded = to_binary(&row, &schema).unwrap();
         assert_eq!(encoded.len(), 3996);
@@ -740,9 +742,9 @@ mod test_cases {
         assert_eq!(&encoded[22..], text.as_bytes());
         let text = format!("{text}a");
         let row = Row::builder(&schema)
-            .value(7, RowCellValue::NULL)
-            .value(99, text)
-            .value(42, RowCellValue::NULL)
+            .value(ColumnId::new(7), RowCellValue::NULL)
+            .value(ColumnId::new(99), text)
+            .value(ColumnId::new(42), RowCellValue::NULL)
             .build();
         assert!(matches!(
             to_binary(&row, &schema),
@@ -756,7 +758,7 @@ mod test_cases {
         let mut builder = Schema::builder(1);
         for position in 0..64 {
             builder = builder.column(
-                position,
+                ColumnId::new(position),
                 format!("column_{position}"),
                 if position % 2 == 0 {
                     DataType::Int
@@ -767,10 +769,13 @@ mod test_cases {
                 position < 2,
             );
         }
-        let schema = builder.pk([0, 1]).build().unwrap();
+        let schema = builder
+            .pk([ColumnId::new(0), ColumnId::new(1)])
+            .build()
+            .unwrap();
         let mut row = Row::builder(&schema);
         for position in 0..64 {
-            row = row.value(position, RowCellValue::NULL);
+            row = row.value(ColumnId::new(position), RowCellValue::NULL);
         }
         let bytes = to_binary(&row.build(), &schema).unwrap();
         assert_eq!(bytes.len(), 206);
@@ -820,16 +825,16 @@ mod test_cases {
     fn tc_row_des_002_order_independent_round_trip() {
         let schema = create_schema();
         let first = Row::builder(&schema)
-            .value(0, 1)
-            .value(1, "Mary")
-            .value(2, 25)
-            .value(3, "mary@mail.com")
+            .value(ColumnId::new(0), 1)
+            .value(ColumnId::new(1), "Mary")
+            .value(ColumnId::new(2), 25)
+            .value(ColumnId::new(3), "mary@mail.com")
             .build();
         let second = Row::builder(&schema)
-            .value(3, "mary@mail.com")
-            .value(2, 25)
-            .value(1, "Mary")
-            .value(0, 1)
+            .value(ColumnId::new(3), "mary@mail.com")
+            .value(ColumnId::new(2), 25)
+            .value(ColumnId::new(1), "Mary")
+            .value(ColumnId::new(0), 1)
             .build();
         let expected = hex(
             "2B 00 02 00 02 00 01 00 00 00 19 00 00 00 00 00 00 00 00 00 00 00 04 00 11 00 4D 61 72 79 6D 61 72 79 40 6D 61 69 6C 2E 63 6F 6D",
@@ -939,13 +944,13 @@ mod test_cases {
         bytes[10..18].copy_from_slice(&[1, 0, 0, 0, 0, 0, 0, 0]);
         assert!(matches!(
             from_binary(&bytes, &schema),
-            Err(RowDeserializationError::InvalidNullColumn { column_id: 5 })
+            Err(RowDeserializationError::InvalidNullColumn { column_id }) if column_id == ColumnId::new(5)
         ));
         let mut bytes = encoded_row_with_value_7_and_label_hi();
         bytes[10..18].copy_from_slice(&[2, 0, 0, 0, 0, 0, 0, 0]);
         assert!(matches!(
             from_binary(&bytes, &schema),
-            Err(RowDeserializationError::InvalidNullColumn { column_id: 6 })
+            Err(RowDeserializationError::InvalidNullColumn { column_id }) if column_id == ColumnId::new(6)
         ));
     }
 
@@ -953,8 +958,8 @@ mod test_cases {
     #[test]
     fn tc_row_des_005_invalid_string_sections() {
         let schema = Schema::builder(9)
-            .column(10, "first", DataType::String, 0, false)
-            .column(11, "second", DataType::String, 1, false)
+            .column(ColumnId::new(10), "first", DataType::String, 0, false)
+            .column(ColumnId::new(11), "second", DataType::String, 1, false)
             .build()
             .unwrap();
         let baseline = hex("17 00 00 00 02 00 00 00 00 00 00 00 00 00 02 00 05 00 61 62 63 64 65");
@@ -1009,7 +1014,7 @@ mod test_cases {
         ));
 
         let one_string = Schema::builder(9)
-            .column(6, "label", DataType::String, 0, false)
+            .column(ColumnId::new(6), "label", DataType::String, 0, false)
             .build()
             .unwrap();
         let bytes = hex("11 00 00 00 01 00 00 00 00 00 00 00 00 00 01 00 FF");
@@ -1019,7 +1024,7 @@ mod test_cases {
         ));
 
         let one_int = Schema::builder(9)
-            .column(5, "value", DataType::Int, 0, false)
+            .column(ColumnId::new(5), "value", DataType::Int, 0, false)
             .build()
             .unwrap();
         let mut bytes = hex("12 00 01 00 00 00 07 00 00 00 00 00 00 00 00 00 00 00");
@@ -1039,8 +1044,8 @@ mod test_helpers {
 
     pub(super) fn schema_with_int_value_and_string_label() -> Schema {
         Schema::builder(9)
-            .column(5, "value", DataType::Int, 0, false)
-            .column(6, "label", DataType::String, 1, false)
+            .column(ColumnId::new(5), "value", DataType::Int, 0, false)
+            .column(ColumnId::new(6), "label", DataType::String, 1, false)
             .build()
             .unwrap()
     }
@@ -1055,11 +1060,11 @@ mod test_helpers {
 
     pub(super) fn create_schema() -> Schema {
         Schema::builder(1)
-            .column(0, "id", DataType::Int, 0, true)
-            .column(1, "name", DataType::String, 1, false)
-            .column(2, "age", DataType::Int, 2, false)
-            .column(3, "email", DataType::String, 3, false)
-            .pk([0])
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(1), "name", DataType::String, 1, false)
+            .column(ColumnId::new(2), "age", DataType::Int, 2, false)
+            .column(ColumnId::new(3), "email", DataType::String, 3, false)
+            .pk([ColumnId::new(0)])
             .build()
             .unwrap()
     }

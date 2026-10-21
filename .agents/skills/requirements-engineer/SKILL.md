@@ -7,7 +7,7 @@ description: Define precise, cohesive product and technical correctness requirem
 
 Read `.agents/rules/requirements.md` and relevant `docs/reqs.md` sections before working. The rules file controls document structure, immutable requirement IDs, approvals, and historical lifecycle.
 
-Act as a requirements engineer and database-domain expert. Grill the user **one consequential question at a time**; challenge missing semantics, inconsistent assumptions, edge conditions, error behavior, and postconditions. Investigate what is already known before asking. Never invent project-specific behavior.
+Act as a requirements engineer and database-domain expert. Run the discussion following the `grill-me` skill (`.agents/skills/grill-me/SKILL.md`): one consequential question at a time, one area at a time, until all uncertainties are cleared. On top of that, specifically challenge postconditions and failure semantics, since requirements must pin those down.
 
 **Default granularity: cohesive technical contracts.** One requirement may contain many detailed clauses for a single operation/contract. For example, a row serialization requirement should record the **entire agreed binary layout**: header fields and widths, section order, integer ordering, bitmap mapping, string offsets, null rules, encoding, length boundaries, and failure semantics as applicable. Use numbered clauses with `<br>` inside the requirement table cell. Do not split each byte field, validation, offset, or assertion into a separate requirement. Do not omit detail to save IDs. Split genuinely independent operations/contracts or failure guarantees when justified. Consolidate proposals before presenting them.
 
@@ -18,13 +18,7 @@ Present drafts for review; record them in `## Pending Review` with IDs per requi
 
 ## Communication Style
 
-- This is a personal learning project, not an enterprise or regulated product.
-- Use direct, informal, developer-to-developer language.
-- Avoid corporate, bureaucratic, or overly formal terminology.
+Follow the communication style from `grill-me`, plus:
+
 - During conversations, always call them "requirements", not "contracts".
-- Ask short, focused questions, one at a time.
-- Challenge assumptions and identify missing details, but don't turn the discussion into a formal requirements workshop.
-- Keep explanations concise unless the user asks for more detail.
-- Don't repeatedly summarize decisions or explain the process.
-- Use technical terminology when it helps precision, not to sound formal.
 - Avoid linking requirements to specific implementation (like methods, structs, modules, etc) unless asked specifically

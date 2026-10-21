@@ -2,6 +2,7 @@ use crate::file::api::FileManager;
 use crate::file::file_catalog::FileCatalog;
 use crate::page::PAGE_SIZE;
 use crate::page::metadata::page_id::{FileId, PageId};
+use shared::schemas::identifiers::DatabaseId;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -17,7 +18,7 @@ use std::os::windows::fs::FileExt;
 /// A disk based file manager
 #[derive(Debug)]
 pub struct DiskFileManager {
-    files: RwLock<HashMap<FileId, Arc<File>>>,
+    files: RwLock<HashMap<(DatabaseId, FileId), Arc<File>>>,
     file_catalog: Arc<FileCatalog>,
 }
 
@@ -30,7 +31,7 @@ impl FileManager for DiskFileManager {
     }
 
     fn read_page(&self, page_id: PageId, destination: &mut [u8]) -> Result<(), FileManagerError> {
-        let file = self.get_or_open_file(page_id.file_id)?;
+        let file = self.get_or_open_file(page_id.db_id, page_id.file_id)?;
 
         let offset = ((page_id.page_number as usize) * (PAGE_SIZE)) as u64;
 
@@ -46,7 +47,7 @@ impl FileManager for DiskFileManager {
     }
 
     fn write_page(&self, page_id: PageId, page_data: &[u8]) -> Result<(), FileManagerError> {
-        let file = self.get_or_open_file(page_id.file_id)?;
+        let file = self.get_or_open_file(page_id.db_id, page_id.file_id)?;
 
         let offset = ((page_id.page_number as usize) * (PAGE_SIZE)) as u64;
 
@@ -79,11 +80,15 @@ impl FileManager for DiskFileManager {
 impl DiskFileManager {
     /// Attempt to either retrieve the file handle or open one if not already present in memory
     /// Returns `Arc<File>` if successful, `FileManagerError` if something goes wrong
-    fn get_or_open_file(&self, file_id: FileId) -> Result<Arc<File>, FileManagerError> {
+    fn get_or_open_file(
+        &self,
+        db_id: DatabaseId,
+        file_id: FileId,
+    ) -> Result<Arc<File>, FileManagerError> {
         // First check to see if the file has already been opened - if yes we can return early.
         {
             let files = self.files.read().unwrap();
-            if let Some(file) = files.get(&file_id) {
+            if let Some(file) = files.get(&(db_id, file_id)) {
                 return Ok(Arc::clone(file));
             }
         }
@@ -92,15 +97,15 @@ impl DiskFileManager {
         let mut files = self.files.write().unwrap();
 
         // Double check in case someone got there first
-        if let Some(file) = files.get(&file_id) {
+        if let Some(file) = files.get(&(db_id, file_id)) {
             return Ok(Arc::clone(file));
         }
 
         // Find the path to the file
         let path = self
             .file_catalog
-            .get_file_name(file_id)
-            .ok_or(FileManagerError::FilePathNotFound { file_id })?;
+            .get_file_name(db_id, file_id)
+            .ok_or(FileManagerError::FilePathNotFound { db_id, file_id })?;
 
         // Create parent directory if needed
         Self::ensure_parent_dir(&path);
@@ -115,7 +120,7 @@ impl DiskFileManager {
 
         let file = Arc::new(file);
 
-        files.insert(file_id, Arc::clone(&file));
+        files.insert((db_id, file_id), Arc::clone(&file));
 
         Ok(file)
     }
@@ -182,7 +187,7 @@ mod tests {
         let file_path = dir.path().join("data.db");
 
         let catalog = FileCatalog::new();
-        catalog.add_file(1, file_path.clone());
+        catalog.add_file(DatabaseId::new(1), 1, file_path.clone());
 
         let manager = DiskFileManager::new(Arc::new(catalog));
 
@@ -191,13 +196,13 @@ mod tests {
 
         // Write page 0
         manager
-            .write_page(PageId::new(1, 0), &write_buf)
+            .write_page(PageId::new(DatabaseId::new(1), 1, 0), &write_buf)
             .expect("write_page failed");
 
         // Read back
         let mut read_buf = vec![0u8; PAGE_SIZE];
         manager
-            .read_page(PageId::new(1, 0), &mut read_buf)
+            .read_page(PageId::new(DatabaseId::new(1), 1, 0), &mut read_buf)
             .expect("read_page failed");
 
         assert_eq!(read_buf, write_buf);
@@ -209,20 +214,20 @@ mod tests {
         let file_path = dir.path().join("data2.db");
 
         let catalog = FileCatalog::new();
-        catalog.add_file(2, file_path.clone());
+        catalog.add_file(DatabaseId::new(1), 2, file_path.clone());
 
         let manager = DiskFileManager::new(Arc::new(catalog));
 
         // Attempt to read page 1 (not yet written) - should return DidNotReadAllBytes
         let mut read_buf = vec![0u8; PAGE_SIZE];
-        let res = manager.read_page(PageId::new(2, 1), &mut read_buf);
+        let res = manager.read_page(PageId::new(DatabaseId::new(1), 2, 1), &mut read_buf);
 
         match res {
             Err(FileManagerError::DidNotReadAllBytes {
                 page_id,
                 bytes_read: _,
             }) => {
-                assert_eq!(page_id, PageId::new(2, 1));
+                assert_eq!(page_id, PageId::new(DatabaseId::new(1), 2, 1));
             }
             other => panic!("unexpected result: {:?}", other),
         }
@@ -234,18 +239,18 @@ mod tests {
         let file_path = dir.path().join("short.db");
 
         let catalog = FileCatalog::new();
-        catalog.add_file(10, file_path.clone());
+        catalog.add_file(DatabaseId::new(1), 10, file_path.clone());
 
         let manager = DiskFileManager::new(Arc::new(catalog));
 
         // Provide a buffer smaller than PAGE_SIZE - this should eventually trigger WroteZeroBytes
         let short_buf = vec![0xCDu8; PAGE_SIZE - 16];
 
-        let res = manager.write_page(PageId::new(10, 0), &short_buf);
+        let res = manager.write_page(PageId::new(DatabaseId::new(1), 10, 0), &short_buf);
 
         match res {
             Err(FileManagerError::WroteZeroBytes { page_id }) => {
-                assert_eq!(page_id, PageId::new(10, 0));
+                assert_eq!(page_id, PageId::new(DatabaseId::new(1), 10, 0));
             }
             other => panic!("expected WroteZeroBytes, got: {:?}", other),
         }
@@ -257,10 +262,13 @@ mod tests {
         let manager = DiskFileManager::new(Arc::new(catalog));
 
         let buf = vec![0u8; PAGE_SIZE];
-        let res = manager.write_page(PageId::new(99, 0), &buf);
+        let res = manager.write_page(PageId::new(DatabaseId::new(1), 99, 0), &buf);
 
         match res {
-            Err(FileManagerError::FilePathNotFound { file_id }) => assert_eq!(file_id, 99),
+            Err(FileManagerError::FilePathNotFound { db_id, file_id }) => {
+                assert_eq!(db_id, DatabaseId::new(1));
+                assert_eq!(file_id, 99);
+            }
             other => panic!("expected FilePathNotFound, got: {:?}", other),
         }
     }
@@ -271,18 +279,18 @@ mod tests {
         let file_path = dir.path().join("a/b/c/nested.db");
 
         let catalog = FileCatalog::new();
-        catalog.add_file(42, file_path.clone());
+        catalog.add_file(DatabaseId::new(1), 42, file_path.clone());
 
         let manager = DiskFileManager::new(Arc::new(catalog));
 
         let write_buf = vec![0xEEu8; PAGE_SIZE];
         manager
-            .write_page(PageId::new(42, 3), &write_buf)
+            .write_page(PageId::new(DatabaseId::new(1), 42, 3), &write_buf)
             .expect("write_page failed");
 
         let mut read_buf = vec![0u8; PAGE_SIZE];
         manager
-            .read_page(PageId::new(42, 3), &mut read_buf)
+            .read_page(PageId::new(DatabaseId::new(1), 42, 3), &mut read_buf)
             .expect("read_page failed");
 
         assert_eq!(read_buf, write_buf);

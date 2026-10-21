@@ -1,5 +1,6 @@
 use crate::page::layout::page::Page;
 use crate::page::metadata::page_id::PageId;
+use shared::schemas::identifiers::DatabaseId;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 
@@ -39,7 +40,7 @@ impl Default for BufferFrame {
     fn default() -> Self {
         Self {
             page_id: RwLock::new(None),
-            page: RwLock::new(Page::new_zeroed(PageId::new(0, 0))),
+            page: RwLock::new(Page::new_zeroed(PageId::new(DatabaseId::new(1), 0, 0))),
             pin_count: AtomicU32::new(0),
             dirty: AtomicBool::new(false),
         }

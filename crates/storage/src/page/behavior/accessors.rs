@@ -31,10 +31,11 @@ impl Page {
 mod new_and_accessors_tests {
     use super::*;
     use crate::page::metadata::page_type::PageType;
+    use shared::schemas::identifiers::DatabaseId;
 
     #[test]
     fn test_get_page_id() {
-        let page_id = PageId::new(2, 5);
+        let page_id = PageId::new(DatabaseId::new(1), 2, 5);
         let page = Page::new_empty(page_id, PageType::IndexLeaf).unwrap();
 
         assert_eq!(page.page_id(), page_id);

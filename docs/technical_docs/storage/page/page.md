@@ -8,7 +8,7 @@ The page methods initialize the bytes, expose borrowed views and apply heap oper
 
 ## Identity and type
 
-`PageId` contains `file_id: u32` and `page_number: u32`. `FileId` is an alias for `u32`; the catalog maps it to a path. Equality and hashing use both fields, and the display form is `file_id:page_number`. The byte header stores only the page number.
+`PageId` contains `db_id: DatabaseId`, `file_id: FileId` and `page_number: u32`. `FileId` is an alias for `ObjectId` (a `u16`), and the file ID is the ID of the table or nonclustered index stored in the file (see [identifiers](../../shared/schemas/identifiers.md)). File IDs are only unique within a database, so we need all three fields to find a page. The catalog maps `(db_id, file_id)` to a path. Equality and hashing use all three fields, and the display form is `db_id:file_id:page_number`, for example `2:5:0`. The byte header stores only the page number, because sibling pointers never leave their file.
 
 `PageType` converts to these `u16` values:
 

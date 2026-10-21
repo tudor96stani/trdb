@@ -1,4 +1,4 @@
-use crate::schemas::ObjectId;
+use crate::schemas::identifiers::ColumnId;
 use crate::schemas::schema::{Schema, SchemaEntry, SchemaEntryId};
 use std::collections::HashMap;
 
@@ -125,7 +125,7 @@ impl<'a> RowBuilder<'a> {
     }
 
     /// Append a new value to the row builder by column id.
-    pub fn value(self, column_id: ObjectId, value: impl Into<RowCellValue>) -> Self {
+    pub fn value(self, column_id: ColumnId, value: impl Into<RowCellValue>) -> Self {
         let schema_entry = self.schema_entry_by_column_id(column_id);
         self.cell(schema_entry, value)
     }
@@ -147,7 +147,7 @@ impl<'a> RowBuilder<'a> {
         Row::new(self.values)
     }
 
-    fn schema_entry_by_column_id(&self, column_id: ObjectId) -> &'a SchemaEntry {
+    fn schema_entry_by_column_id(&self, column_id: ColumnId) -> &'a SchemaEntry {
         self.schema
             .columns()
             .values()
@@ -195,33 +195,36 @@ mod row_builder_tests {
     #[test]
     fn test_row_builder_creates_cells_from_column_ids() {
         let schema = Schema::builder(1)
-            .column(0, "id", DataType::Int, 0, true)
-            .column(1, "name", DataType::String, 1, false)
-            .pk([0])
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(1), "name", DataType::String, 1, false)
+            .pk([ColumnId::new(0)])
             .build()
             .unwrap();
 
-        let row = Row::builder(&schema).value(0, 10).value(1, "Ada").build();
+        let row = Row::builder(&schema)
+            .value(ColumnId::new(0), 10)
+            .value(ColumnId::new(1), "Ada")
+            .build();
 
         let mut values = row.values().collect::<Vec<_>>();
         values.sort_by_key(|cell| schema.columns()[&cell.schema_entry_id()].position());
 
         assert_eq!(values.len(), 2);
         assert_eq!(values[0].schema_entry_id().owner_id(), 1);
-        assert_eq!(values[0].schema_entry_id().column_id(), 0);
+        assert_eq!(values[0].schema_entry_id().column_id(), ColumnId::new(0));
         assert!(matches!(values[0].value(), RowCellValue::Int(10)));
         assert_eq!(values[1].schema_entry_id().owner_id(), 1);
-        assert_eq!(values[1].schema_entry_id().column_id(), 1);
+        assert_eq!(values[1].schema_entry_id().column_id(), ColumnId::new(1));
         assert!(matches!(values[1].value(), RowCellValue::String(value) if value == "Ada"));
     }
 
     #[test]
     fn test_row_builder_creates_cells_from_schema_entries_positions_and_names() {
         let schema = Schema::builder(1)
-            .column(0, "id", DataType::Int, 0, true)
-            .column(1, "name", DataType::String, 1, false)
-            .column(2, "email", DataType::String, 2, false)
-            .pk([0])
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(1), "name", DataType::String, 1, false)
+            .column(ColumnId::new(2), "email", DataType::String, 2, false)
+            .pk([ColumnId::new(0)])
             .build()
             .unwrap();
 

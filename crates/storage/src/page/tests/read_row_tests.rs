@@ -6,10 +6,12 @@ mod read_row_test {
     use crate::page::layout::slot::SlotMut;
     use crate::page::metadata::page_id::PageId;
     use crate::page::metadata::page_type::PageType;
+    use shared::schemas::identifiers::DatabaseId;
 
     #[test]
     fn read_row_out_of_bounds() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         page.header_mut().unwrap().set_slot_count(2).unwrap();
         page.header_mut().unwrap().set_free_end(4088).unwrap();
 
@@ -19,7 +21,8 @@ mod read_row_test {
             Err(PageError {
                 page_id: PageId {
                     file_id: 1,
-                    page_number: 0
+                    page_number: 0,
+                    ..
                 },
                 source: PageOpError::ReadRow(ReadRowError::SlotError(
                     SlotError::SlotRegionSizeMismatch {
@@ -34,7 +37,7 @@ mod read_row_test {
         // Rust
         assert!(matches!(
             result,
-            Err(e) if e.page_id == PageId::new(1, 0)
+            Err(e) if e.page_id == PageId::new(DatabaseId::new(1), 1, 0)
                 && matches!(
                     e.source,
                     PageOpError::ReadRow(ReadRowError::SlotError(
@@ -59,7 +62,7 @@ mod read_row_test {
         slot.set_offset(96).unwrap();
         slot.set_length(10).unwrap();
 
-        let mut page = Page::new_from_bytes(page_bytes, PageId::new(1, 0));
+        let mut page = Page::new_from_bytes(page_bytes, PageId::new(DatabaseId::new(1), 1, 0));
         page.header_mut().unwrap().set_free_end(4091).unwrap();
         page.header_mut().unwrap().set_slot_count(1).unwrap();
 

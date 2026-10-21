@@ -13,6 +13,7 @@
 
 use crate::config::EngineConfig;
 use crate::engine_environment::EngineEnvironment;
+use shared::schemas::identifiers::DatabaseId;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -51,7 +52,7 @@ async fn main() {
     e.setup_test_data();
 
     // dummy page
-    let page_id = PageId::new(1, 0);
+    let page_id = PageId::new(DatabaseId::new(1), 1, 0);
     match e.storage.read_page(page_id) {
         Ok(existing_page) => {
             tracing::info!("Found page with ID {:?}", page_id);
@@ -242,7 +243,7 @@ async fn handle_client(
 
 fn process_query(e: Arc<EngineEnvironment>, number: u32) -> Vec<u8> {
     // Read the page with the hardcoded ID
-    let page_id = PageId::new(1, 0);
+    let page_id = PageId::new(DatabaseId::new(1), 1, 0);
     let mut page = e.storage.read_page_mut(page_id).unwrap();
 
     // Attempt an insert of a 100bytes row

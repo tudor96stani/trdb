@@ -18,7 +18,7 @@ Pinning means keeping a cached page resident while it is needed. A dirty page ha
 
 `FrameId` is the frame's index in the vector. Since the vector does not grow, we can keep using that index while changing the frame's contents.
 
-`page_map` maps a stored page ID to its cache entry. It is an `RwLock<HashMap<PageId, Arc<PageEntry>>>`. Each entry has a state mutex and a condition variable. The mutex protects `PageState`; the condition variable lets callers sleep until a loader signals a state change. The state is either `Loading` or `Ready(FrameId)`, so an entry can exist while disk I/O is still in progress.
+`page_map` maps a stored page ID (database, file and page number) to its cache entry. It is an `RwLock<HashMap<PageId, Arc<PageEntry>>>`. Each entry has a state mutex and a condition variable. The mutex protects `PageState`; the condition variable lets callers sleep until a loader signals a state change. The state is either `Loading` or `Ready(FrameId)`, so an entry can exist while disk I/O is still in progress.
 
 ![Buffer manager](../../../attachments/buffer%20manager%20in%20trdb%202026-02-14%2016.56.52.excalidraw.png)
 

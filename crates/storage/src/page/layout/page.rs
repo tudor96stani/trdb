@@ -7,7 +7,7 @@ use crate::page::metadata::page_type::PageType;
 /// Wrapper around a fixed-size byte array representing a page.
 #[derive(Debug)]
 pub struct Page {
-    /// Unique identifier of the page. Comprised of file_name_hash::page_number_within_file
+    /// Unique identifier of the page. Comprised of `(db_id, file_id, page_number)`: the database, the file within the database folder and the page number within the file
     pub page_id: PageId,
     /// Main binary array holding the `PAGE_SIZE` bytes of data for the page. Boxed and owned by this struct.
     pub data: Box<[u8; PAGE_SIZE]>,

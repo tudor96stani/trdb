@@ -1,12 +1,15 @@
 use crate::page::metadata::page_id::{FileId, PageId};
+use shared::schemas::identifiers::DatabaseId;
 use thiserror::Error;
 
 /// All errors exposed by the `file` crate
 #[derive(Debug, Error)]
 pub enum FileManagerError {
-    /// Could not find path to file based on requested `file_id`
-    #[error("Could not find path for file with ID {file_id}")]
+    /// Could not find path to file based on requested `db_id` and `file_id`
+    #[error("Could not find path for file with ID {file_id} in database with ID {db_id}")]
     FilePathNotFound {
+        /// The ID of the database owning the file for which the path was requested
+        db_id: DatabaseId,
         /// The ID of the file for which the path was requested
         file_id: FileId,
     },

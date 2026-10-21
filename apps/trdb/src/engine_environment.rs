@@ -1,4 +1,5 @@
 use crate::config::EngineConfig;
+use shared::schemas::identifiers::DatabaseId;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -37,9 +38,15 @@ impl EngineEnvironment {
     }
 
     pub fn setup_test_data(&self) {
-        let path = self.engine_config.storage.data_dir.join("test.tbl");
+        // Files live under `<data_dir>/<db name>/<file>`; database 1 is the `master` database
+        let path = self
+            .engine_config
+            .storage
+            .data_dir
+            .join("master")
+            .join("test.tbl");
         let full_path = std::path::absolute(&path).unwrap();
         tracing::info!("Full path: {}", full_path.display());
-        self.file_catalog.add_file(1, path)
+        self.file_catalog.add_file(DatabaseId::new(1), 1, path)
     }
 }

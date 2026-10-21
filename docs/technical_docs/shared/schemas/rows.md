@@ -16,17 +16,18 @@ Each `RowCell` owns its ID and value. The finished row does not borrow the schem
 
 ```rust
 use shared::schemas::data_type::DataType;
+use shared::schemas::identifiers::ColumnId;
 use shared::schemas::row::{Row, RowCellValue};
 use shared::schemas::schema::Schema;
 
 let schema = Schema::builder(1)
-    .column(0, "id", DataType::Int, 0, true)
-    .column(1, "name", DataType::String, 1, false)
-    .pk([0])
+    .column(ColumnId::new(0), "id", DataType::Int, 0, true)
+    .column(ColumnId::new(1), "name", DataType::String, 1, false)
+    .pk([ColumnId::new(0)])
     .build()
     .expect("valid schema");
 let row = Row::builder(&schema)
-    .value(0, 7)
+    .value(ColumnId::new(0), 7)
     .value_named("name", RowCellValue::NULL)
     .build();
 ```

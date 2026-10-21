@@ -4,6 +4,8 @@ use crate::page::layout::slot::SLOT_SIZE;
 use crate::page::metadata::page_id::PageId;
 use crate::page::metadata::page_type::PageType;
 use crate::page::{HEADER_SIZE, PAGE_SIZE};
+#[cfg(test)]
+use shared::schemas::identifiers::DatabaseId;
 
 #[cfg(test)]
 mod delete_row_tests;
@@ -21,7 +23,7 @@ mod update_row_tests;
 impl Page {
     /// Returns a new empty heap page for testing purposes
     pub fn test_create_empty_heap() -> Page {
-        Page::new_empty(PageId::new(1, 1), PageType::Unsorted).unwrap()
+        Page::new_empty(PageId::new(DatabaseId::new(1), 1, 1), PageType::Unsorted).unwrap()
     }
 
     /// Sets the provided slot count in the header and updates the free_end field accordingly.

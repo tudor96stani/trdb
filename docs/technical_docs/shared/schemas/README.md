@@ -6,3 +6,4 @@ Schema metadata and in-memory rows in `shared::schemas`.
 
 - [Schemas and identifiers](schemas.md)
 - [Rows and row builder](rows.md)
+- [Object identifiers](identifiers.md)

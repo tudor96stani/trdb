@@ -8,7 +8,8 @@ These instructions apply when writing or editing technical documentation under `
 - Never edit, append to, rewrite or otherwise update `docs/decision log.md` or `docs/implementation notes.md` unless specifically asked to update that file in the prompt. A general request to document an implementation or explain a decision does not authorize updating either file.
 - Use technical documentation to describe behavior, formats, constraints and relevant reasoning. Do not automatically add decision log entries or implementation notes as part of this work.
 - Document how the component behaves, how it is implemented and why it is designed that way. Technical docs are not a code review or bug backlog: do not include implementation faults, missing checks, broken edge cases, correctness warnings or lists of shortcomings. Bugs belong in a task tracking tool, not in these documents. Do not investigate the code for new issues as part of a documentation review unless explicitly asked.
-- Keep normal API errors, supported scope and caller responsibilities when they explain how to use the component. State them as behavior or contracts, without turning them into criticism of the implementation. Keep unfinished features clearly marked rather than describing them as working.
+- Keep normal API errors, supported scope and caller responsibilities when they explain how to use the component. State them as behavior or contracts, without turning them into criticism of the implementation.
+- Do not add notes about implementation status, such as "not yet implemented", "currently the code does X" or "still to do". They go stale as soon as the code catches up and make the doc drift. Describe the design as it is meant to work.
 - Documentation should be self-contained - meaning do not reference documents outside of the `technical_docs` folder
 
 ## Voice and phrasing
@@ -30,7 +31,7 @@ These instructions apply when writing or editing technical documentation under `
 - Present the implementation succinctly: identify the responsible components, their ownership boundaries and the main flow. Keep field layouts and concrete examples where they help explain the concept, but avoid a method-by-method inventory or repeating the code in prose.
 - Organize around the subject, with simple headings such as `High level`, `Layout`, `process`, `Planning phase`, `Reasoning`, `Example`, `Possible improvements` and `See also`. Follow the local document's conventions.
 - Explain an operation in execution order. Use numbered steps for ordered checks and actions, bullets for fields, responsibilities, scenarios or tradeoffs, and prose for reasoning.
-- Use `TBD` or `Not yet implemented` for unfinished sections when appropriate. Do not fill them with speculative behavior presented as implemented.
+- Use `TBD` for parts of the design that haven't been decided yet. Do not fill them with speculative behavior presented as decided.
 - Match the high level folder structure to the crates and modules in the codebase.
 - Not every struct and rs file requires a document - if multiple files aggregate to produce a single functionality, keep them together
 - If a topic spans multiple files, create a subfolder and place all of them in there

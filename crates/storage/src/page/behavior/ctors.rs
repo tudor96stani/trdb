@@ -28,10 +28,11 @@ mod new_and_accessors_tests {
     use super::*;
     use crate::page::PAGE_SIZE;
     use crate::page::metadata::page_type::PageType;
+    use shared::schemas::identifiers::DatabaseId;
 
     #[test]
     fn test_new_empty_page() {
-        let page_id = PageId::new(1, 0);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 0);
         let page = Page::new_empty(page_id, PageType::Unsorted).unwrap();
 
         assert_eq!(page.page_id(), page_id);
@@ -46,7 +47,7 @@ mod new_and_accessors_tests {
 
     #[test]
     fn test_new_from_bytes() {
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
         let bytes = Box::new([5u8; PAGE_SIZE]);
         let page = Page::new_from_bytes(bytes, page_id);
 

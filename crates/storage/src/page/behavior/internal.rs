@@ -80,29 +80,34 @@ mod private_methods_tests {
     use super::*;
     use crate::page::metadata::page_id::PageId;
     use crate::page::metadata::page_type::PageType;
+    use shared::schemas::identifiers::DatabaseId;
 
     // region Row fits
     #[test]
     fn row_fits_enough_space() {
-        let page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         assert!(page.row_size_fits(100).unwrap());
     }
 
     #[test]
     fn row_fits_at_limit() {
-        let page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         assert!(page.row_size_fits(3996).unwrap());
     }
 
     #[test]
     fn row_fits_slot_would_not_fit() {
-        let page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         assert!(!page.row_size_fits(3998).unwrap());
     }
 
     #[test]
     fn row_fits_would_not_fit_at_all() {
-        let page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         assert!(!page.row_size_fits(4000).unwrap());
     }
     // endregion
@@ -110,7 +115,8 @@ mod private_methods_tests {
     // region Slot array
     #[test]
     fn slot_array_corrupted_header_returns_error() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let _ = page.header_mut().unwrap().set_free_end(4090);
         let _ = page.header_mut().unwrap().set_slot_count(10);
 
@@ -128,7 +134,8 @@ mod private_methods_tests {
     // region Compact
     #[test]
     fn compact_with_no_slots_sets_free_end_to_header_size() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // Ensure no slots
         page.header_mut().unwrap().set_slot_count(0).unwrap();
         // Call compact
@@ -142,7 +149,8 @@ mod private_methods_tests {
 
     #[test]
     fn compact_with_all_slots_invalid_sets_free_end_to_header_size_and_leaves_slots_zero() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // Allocate two slots but leave them zeroed (invalid)
         let slot_count: u16 = 2;
         page.header_mut()
@@ -175,7 +183,8 @@ mod private_methods_tests {
 
     #[test]
     fn compact_moves_valid_rows_in_slot_index_order_and_updates_slots() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // Prepare 3 slots; slot 0 and 2 are valid, slot 1 invalid
         let slot_count: u16 = 3;
         page.header_mut()

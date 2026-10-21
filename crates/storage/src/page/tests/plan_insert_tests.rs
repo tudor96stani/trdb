@@ -7,10 +7,12 @@ mod plan_insert_test {
     use crate::page::metadata::page_id::PageId;
     use crate::page::metadata::page_type::PageType;
     use crate::page::{HEADER_SIZE, PAGE_SIZE};
+    use shared::schemas::identifiers::DatabaseId;
 
     #[test]
     fn plan_insert_new_slot_fast_path() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // ensure no slots and a large free region
         page.header_mut().unwrap().set_free_start(100).unwrap();
         page.header_mut()
@@ -31,7 +33,8 @@ mod plan_insert_test {
 
     #[test]
     fn plan_insert_reuse_slot() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // prepare one slot that's invalid (zeros)
         let slot_count: u16 = 1;
         page.header_mut()
@@ -56,7 +59,8 @@ mod plan_insert_test {
 
     #[test]
     fn plan_insert_not_enough_space_error() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // make free_space small so insertion fails; keep free_end consistent with slot_count==0
         page.header_mut().unwrap().set_free_start(100).unwrap();
         page.header_mut()
@@ -68,7 +72,7 @@ mod plan_insert_test {
         let res = page.plan_insert(50);
 
         assert!(matches!(res,
-            Err(e) if e.page_id == PageId::new(1, 0)
+            Err(e) if e.page_id == PageId::new(DatabaseId::new(1), 1, 0)
                 && matches!(
                     e.source,
                     PageOpError::Insert(InsertError::NotEnoughSpace {

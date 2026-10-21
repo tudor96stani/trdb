@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+shared = {path = "../../crates/shared"}
 storage = {path = "../../crates/storage" }
 tokio = { version = "1.49.0", features = ["full"] }
 tracing.workspace = true

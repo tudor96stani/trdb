@@ -149,10 +149,12 @@ mod tests {
     use crate::page::metadata::page_id::PageId;
     use crate::page::metadata::page_type::PageType;
     use crate::page::{HEADER_SIZE, PAGE_SIZE};
+    use shared::schemas::identifiers::DatabaseId;
 
     #[test]
     fn get_insertion_slot_no_slots_returns_new() {
-        let page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         assert!(matches!(
             page.get_insertion_slot().unwrap(),
             InsertionSlot::New
@@ -161,7 +163,8 @@ mod tests {
 
     #[test]
     fn get_insertion_slot_all_slots_valid_returns_new() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 2;
         page.header_mut()
             .unwrap()
@@ -188,7 +191,8 @@ mod tests {
 
     #[test]
     fn get_insertion_slot_reuses_first_invalid_slot() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 3;
         page.header_mut()
             .unwrap()
@@ -215,7 +219,8 @@ mod tests {
 
     #[test]
     fn get_insertion_slot_reuses_middle_invalid_slot() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 3;
         page.header_mut()
             .unwrap()
@@ -244,7 +249,8 @@ mod tests {
     // Tests for find_insertion_offset
     #[test]
     fn find_insertion_offset_fast_path_returns_free_start() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // No slots => slot_count == 0, slot array must be empty: set free_end to PAGE_SIZE-1
         page.header_mut().unwrap().set_free_start(100).unwrap();
         page.header_mut()
@@ -258,7 +264,8 @@ mod tests {
 
     #[test]
     fn find_insertion_offset_no_valid_rows_requires_compaction() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         // Create one slot but leave it invalid (zeros) so extents will be empty.
         let slot_count: u16 = 1;
         page.header_mut()
@@ -282,7 +289,8 @@ mod tests {
 
     #[test]
     fn find_insertion_offset_finds_gap_between_rows() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 2;
         page.header_mut()
             .unwrap()
@@ -313,7 +321,8 @@ mod tests {
 
     #[test]
     fn find_insertion_offset_finds_tail_gap_after_last_row() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 1;
         page.header_mut()
             .unwrap()
@@ -343,7 +352,8 @@ mod tests {
 
     #[test]
     fn find_insertion_offset_no_contiguous_placement_requires_compaction() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 2;
         page.header_mut()
             .unwrap()
@@ -375,7 +385,8 @@ mod tests {
 
     #[test]
     fn find_insertion_offset_skip_slot_for_updates_gap_correctly_identified() {
-        let mut page = Page::new_empty(PageId::new(1, 0), PageType::Unsorted).unwrap();
+        let mut page =
+            Page::new_empty(PageId::new(DatabaseId::new(1), 1, 0), PageType::Unsorted).unwrap();
         let slot_count: u16 = 3;
         page.header_mut()
             .unwrap()

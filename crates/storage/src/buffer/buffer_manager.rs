@@ -324,6 +324,7 @@ mod tests {
     use crate::file::file_catalog::FileCatalog;
     use crate::page::metadata::page_id::PageId;
     use crate::page::metadata::page_type::PageType;
+    use shared::schemas::identifiers::DatabaseId;
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Barrier, Condvar, Mutex, RwLock};
     use std::{
@@ -406,7 +407,7 @@ mod tests {
     fn read_page_already_cached_returns_page_directly() {
         // Arrange
         let buffer = create_buffer_manager(10);
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
         let frame_id: FrameId = 0;
 
         {
@@ -445,7 +446,7 @@ mod tests {
     fn read_page_not_cached_load_from_disk() {
         // Arrange
         let buffer = create_buffer_manager(10);
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
 
         assert_eq!(buffer.page_map.read().unwrap().len(), 0);
 
@@ -467,7 +468,7 @@ mod tests {
     fn read_page_mut_not_cached_load_from_disk() {
         // Arrange
         let buffer = create_buffer_manager(10);
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
 
         assert_eq!(buffer.page_map.read().unwrap().len(), 0);
 
@@ -493,7 +494,7 @@ mod tests {
     fn wait_until_ready_blocks_until_another_thread_sets_ready() {
         // Arrange
         let buffer = create_buffer_manager(1);
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
         let frame_id: FrameId = 0;
 
         // Insert an entry in Loading state into the page_map
@@ -540,7 +541,7 @@ mod tests {
     fn claim_free_frame_skips_locked_and_claims_first_free() {
         // Arrange
         let buffer = create_buffer_manager(3);
-        let target_page = PageId::new(9, 9);
+        let target_page = PageId::new(DatabaseId::new(1), 9, 9);
 
         {
             // Simulate a locked frame (will cause try_write to return WouldBlock)
@@ -550,7 +551,7 @@ mod tests {
             // Simulate an occupied frame (page_id = Some)
             {
                 let mut w = buffer.frames[1].page_id.write().unwrap();
-                *w = Some(PageId::new(2, 2));
+                *w = Some(PageId::new(DatabaseId::new(1), 2, 2));
             }
 
             // frame 2 is free and should be claimed
@@ -569,9 +570,9 @@ mod tests {
         // Now mark all frames as occupied and ensure None is returned
         for i in 0..3 {
             let mut w = buffer.frames[i].page_id.write().unwrap();
-            *w = Some(PageId::new(i as u32, i as u32));
+            *w = Some(PageId::new(DatabaseId::new(1), i as u16, i as u32));
         }
-        let none_result = buffer.claim_free_frame(PageId::new(99, 99));
+        let none_result = buffer.claim_free_frame(PageId::new(DatabaseId::new(1), 99, 99));
         assert!(none_result.is_none());
     }
 
@@ -593,7 +594,7 @@ mod tests {
         });
 
         // Act
-        let claimed = buffer.claim_free_frame(PageId::new(99, 99));
+        let claimed = buffer.claim_free_frame(PageId::new(DatabaseId::new(1), 99, 99));
         assert_eq!(claimed, Some(1));
     }
 
@@ -608,7 +609,7 @@ mod tests {
 
         let first_thread_buffer = buffer.clone();
         let second_thread_buffer = buffer.clone();
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
 
         let first_handle = thread::spawn(move || {
             first_thread_buffer.read_page(page_id).unwrap();
@@ -646,7 +647,7 @@ mod tests {
                 })
             }
         }
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
 
         let buffer = BufferManager::new(
             Arc::new(FailingFileManager::new(Arc::new(FileCatalog::new()))),
@@ -680,7 +681,7 @@ mod tests {
     #[test]
     fn allocate_new_page_correct_metadata_and_page_allocation() {
         let buffer = create_buffer_manager(100);
-        let page_id = PageId::new(1, 1);
+        let page_id = PageId::new(DatabaseId::new(1), 1, 1);
 
         let _ = buffer.allocate_new_page(page_id).unwrap();
 
