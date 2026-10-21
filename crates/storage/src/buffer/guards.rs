@@ -18,7 +18,7 @@ impl<'a> Deref for PageReadGuard<'a> {
     }
 }
 
-/// Provides write access to a `Page`instance stored in one of the buffer's frames.
+/// Provides write access to a `Page` instance stored in one of the buffer's frames.
 /// Exclusive latch.
 /// Free as soon as possible.
 #[derive(Debug)]

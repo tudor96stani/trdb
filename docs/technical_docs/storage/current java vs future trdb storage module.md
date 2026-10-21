@@ -1,27 +1,35 @@
 ---
 created: 2026-02-14
 ---
-This note does not contain any clear decisions or descriptions of the implementation, but more of a brainstorming process for the given topic.
 
-## Thought process
-The current storage module is quite onion-y:
-![current java vs future trdb storage module 2026-02-14 15.45.04.excalidraw](current%20java%20vs%20future%20trdb%20storage%20module%202026-02-14%2015.45.04.excalidraw.png)
+Storage moves fixed-size pages between files, cached memory and callers. A page contains rows, but the managers do not interpret their column values or choose which pages belong to a table.
 
-Not sure if the Rust approach should be the same. For the bottom two, it's easier, as they have clear responsibilities:
+Row placement belongs to `Page`. Table-wide heap and B+ tree behavior would belong to the relational engine: heaps organize unsorted table rows across pages, while B+ trees organize index keys for lookup. Those parts are not implemented yet.
 
-| Buffer Manager                             | File Manager                                            |
-| ------------------------------------------ | ------------------------------------------------------- |
-| Cache pages                                | Open & close file channels                              |
-| Track pins and dirty flags, last update TS | Read files                                              |
-| Evict                                      | Create, delete files                                    |
-| Depends on: File Manager                   | Depends on: config containing file names(s) & directory |
+## Current architecture
 
-The more problematic, to me, is the storage manager. It has several responsibilities, but no actual state. It mostly only depends on the buffer manager to provide pages, **BUT**, lesson learned from Java, for a few actions it requires access to the file manager (check if file exists, for instance). I think for others as well, like table header (if the table header is not a normal page).
-So maybe a better diagram:
-![current java vs future trdb storage module 2026-02-14 15.50.31.excalidraw](current%20java%20vs%20future%20trdb%20storage%20module%202026-02-14%2015.50.31.excalidraw.png)
-Maybe this reframing helps a bit. Storage and buffer should be on almost equal terms, although the first point of view is still better cause it clearly shows the storage manager as an entry point into the whole subsystem.
+`EngineEnvironment` constructs the catalog, file manager, buffer and storage manager, then keeps shared `Arc`s to them for the server's lifetime.
 
-In terms of its responsibilities, I think the Java version did a bit too much. I don't think it should have the logic about heaps and indexes anymore, but rather those should live in the relational engine (meaning, knowing how the heap is using a directory to keep track of pages, or how the B+tree works). While these use the idea of storage, they do no implement it any more than an index scan or a heap delete does. 
-**So the storage manager should be only passthrough logic for the storage system.** Then maybe it does not need a struct? Unless for testing purposes. 
-And another rule that was broken in the Java implementation, but should be respected here: **the storage engine managers should never deal with anything more granular than pages - never with rows**.
-![current java vs future trdb storage module 2026-02-14 15.57.27.excalidraw](current%20java%20vs%20future%20trdb%20storage%20module%202026-02-14%2015.57.27.excalidraw.png)
+- `StorageManager` provides the page API and delegates its current operations to the buffer.
+- `BufferManager` owns frames, loads pages and returns guards over their bytes.
+- `DiskFileManager` resolves file IDs through the catalog, caches handles and performs page I/O.
+- `FileCatalog` stores file ID to path mappings.
+
+The storage crate groups these components together. The decision log records this as a way to keep the architecture simple for now, without separate API crates for each part.
+
+## Reasoning
+
+The Java implementation put more heap and index behavior in the storage manager. The boundary used here keeps the managers concerned with whole pages, so they do not need to know how a table finds its pages or how an index arranges keys.
+
+The storage manager mostly passes calls through to the buffer. It still holds a file-manager reference because some future page-level operations might need it; none of the current methods use that reference directly.
+
+The environment owns the services because they live for the whole server run. A request only clones the environment's `Arc`, so it uses the existing buffer and file handles rather than constructing new ones.
+
+Eviction, file deletion, WAL and transaction locking are not implemented. The earlier design sketches included some of these responsibilities, but they do not describe current behavior.
+
+## See also
+
+- [Storage manager](storage_manager/storage_manager.md)
+- [Buffer manager](buffer/buffer_manager.md)
+- [File manager](file/file_manager.md)
+- [Service ownership](../apps/trdb/runtime.md)
