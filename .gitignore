@@ -9,3 +9,6 @@
 # Ignore volatile UI-related state
 docs/.obsidian/workspace.json
 docs/.obsidian/app.json
+
+# Local pre-PR and audit reports
+/.review/

@@ -42,7 +42,7 @@ Use available tests, linters, static analyzers, and build commands **only when s
 - Exclude style-only preferences and speculative suggestions. An empty findings list is valid.
 
 ## Output
-Write `.review/pre-pr-report.md` unless the user specifies another location. Ensure `.review/` is ignored or warn if it isn't; don't change `.gitignore` without permission. Use this format:
+Write `.review/pre-pr-report.md` unless the user specifies another location, creating `.review/` if it does not exist. `.review/` is git-ignored; if it is not, warn the user and don't change `.gitignore` without permission. Also include the complete report in the final response, since remote or cloud sessions may not keep the file where the user can read it. Use this format:
 
 ```markdown
 # Pre-PR Review
