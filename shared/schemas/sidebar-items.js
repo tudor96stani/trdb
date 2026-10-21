@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["data_type","schema"],"type":["ObjectId"]};
+window.SIDEBAR_ITEMS = {"mod":["data_type","row","schema"],"type":["ObjectId"]};

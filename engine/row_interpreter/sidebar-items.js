@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["HEADER_SIZE","MAX_ROW_SIZE","NULL_BITMAP_SIZE","OFFSET_SIZE"],"enum":["RowDeserializationError","RowSerializationError"],"fn":["compute_metadata","compute_row_size_in_bytes","from_binary","to_binary","validate_before_deserialization","validate_before_serialization"],"struct":["RowMetadata"]};

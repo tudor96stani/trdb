@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Schema","SchemaBuilder","SchemaEntry","SchemaEntryId"]};
+window.SIDEBAR_ITEMS = {"enum":["SchemaError"],"struct":["Schema","SchemaBuilder","SchemaEntry","SchemaEntryId"]};

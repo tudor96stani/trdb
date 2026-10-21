@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FIXED_LEN_SIZE"],"enum":["RowCellValue"],"struct":["Row","RowBuilder","RowCell"]};
