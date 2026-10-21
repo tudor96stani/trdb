@@ -62,8 +62,12 @@ pub enum RowSerializationError {
     #[error("Error while converting between data types: {0}")]
     Conversion(#[from] ConversionError),
     /// Mismatch between the data type that was expected and the one that was found
-    #[error("Mismatch between expected data type and found data type")]
+    #[error(
+        "schema entry {schema_entry_id:?} has mismatched data type: expected {expected}, got {found}"
+    )]
     MismatchedTypes {
+        /// Identity of the column whose value has the wrong type.
+        schema_entry_id: SchemaEntryId,
         /// Expected type
         expected: DataType,
         /// Found type
@@ -89,8 +93,19 @@ pub enum RowDeserializationError {
     #[error("unused NULL bitmap bits must be zero")]
     InvalidNullBitmap,
     /// String end offsets decrease or exceed the available string data.
-    #[error("string offsets must be nondecreasing and within the string data")]
-    InvalidStringOffsets,
+    #[error(
+        "string at index {index} has invalid byte range {start_offset}..{end_offset} in string data of length {string_data_len}; offsets must be nondecreasing and within the string data"
+    )]
+    InvalidStringOffsets {
+        /// Zero-based index among string columns in schema position order.
+        index: usize,
+        /// Start offset relative to the beginning of string data.
+        start_offset: usize,
+        /// Supplied end offset relative to the beginning of string data.
+        end_offset: usize,
+        /// Available string-data bytes.
+        string_data_len: usize,
+    },
     /// Bytes remain after the final string end offset.
     #[error("row contains bytes beyond the string data")]
     TrailingStringData,
@@ -101,8 +116,19 @@ pub enum RowDeserializationError {
         column_id: ObjectId,
     },
     /// Header column counts differ from the supplied schema.
-    #[error("header column counts must match the schema")]
-    MismatchedColumnCounts,
+    #[error(
+        "header column counts do not match the schema: expected {expected_integers} integer and {expected_strings} string columns, got {actual_integers} integer and {actual_strings} string columns"
+    )]
+    MismatchedColumnCounts {
+        /// Integer column count required by the schema.
+        expected_integers: usize,
+        /// Integer column count declared in the header.
+        actual_integers: usize,
+        /// String column count required by the schema.
+        expected_strings: usize,
+        /// String column count declared in the header.
+        actual_strings: usize,
+    },
     /// The complete encoded row exceeds the maximum size a row can have
     #[error("encoded row exceeds the maximum size of {} bytes", MAX_ROW_SIZE)]
     RowTooLarge,
@@ -187,6 +213,7 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowSerialization
             RowCellValue::NULL => 0,
             RowCellValue::String(_) => {
                 return Err(RowSerializationError::MismatchedTypes {
+                    schema_entry_id: entry.id(),
                     expected: DataType::Int,
                     found: DataType::String,
                 });
@@ -240,6 +267,7 @@ pub fn to_binary(row: &Row, schema: &Schema) -> Result<Vec<u8>, RowSerialization
             RowCellValue::NULL => "",
             RowCellValue::Int(_) => {
                 return Err(RowSerializationError::MismatchedTypes {
+                    schema_entry_id: entry.id(),
                     expected: DataType::String,
                     found: DataType::Int,
                 });
@@ -326,9 +354,14 @@ pub fn from_binary(bytes: &[u8], schema: &Schema) -> Result<Row, RowDeserializat
             let end = string_blob_start + end_offset_of_current_string;
 
             // Checked slicing rejects decreasing offsets and offsets beyond the blob.
-            let string_bytes = bytes
-                .get(cursor_for_already_read_strings..end)
-                .ok_or(RowDeserializationError::InvalidStringOffsets)?;
+            let string_bytes = bytes.get(cursor_for_already_read_strings..end).ok_or(
+                RowDeserializationError::InvalidStringOffsets {
+                    index: i,
+                    start_offset: cursor_for_already_read_strings - string_blob_start,
+                    end_offset: end_offset_of_current_string,
+                    string_data_len: bytes.len() - string_blob_start,
+                },
+            )?;
 
             // At this point, both NULL values and actual empty strings values will produce an empty string in this array
             // we will determine later one which one is it using the bitmap
@@ -445,6 +478,7 @@ fn compute_row_size_in_bytes(row: &Row, schema: &Schema) -> Result<usize, RowSer
                 }
                 RowCellValue::Int(_) => {
                     return Err(RowSerializationError::MismatchedTypes {
+                        schema_entry_id: schema_entry.id(),
                         expected: DataType::String,
                         found: DataType::Int,
                     });
@@ -482,12 +516,14 @@ fn validate_before_serialization(
         match (entry.data_type(), cell.value()) {
             (DataType::Int, RowCellValue::String(_)) => {
                 return Err(RowSerializationError::MismatchedTypes {
+                    schema_entry_id,
                     expected: DataType::Int,
                     found: DataType::String,
                 });
             }
             (DataType::String, RowCellValue::Int(_)) => {
                 return Err(RowSerializationError::MismatchedTypes {
+                    schema_entry_id,
                     expected: DataType::String,
                     found: DataType::Int,
                 });
@@ -539,7 +575,12 @@ fn validate_before_deserialization(
         .count();
     let expected_var = schema.columns().len() - expected_fixed;
     if nb_fixed != expected_fixed || nb_var != expected_var {
-        return Err(RowDeserializationError::MismatchedColumnCounts);
+        return Err(RowDeserializationError::MismatchedColumnCounts {
+            expected_integers: expected_fixed,
+            actual_integers: nb_fixed,
+            expected_strings: expected_var,
+            actual_strings: nb_var,
+        });
     }
 
     let minimum_size =
@@ -631,6 +672,53 @@ mod test_cases {
         );
     }
 
+    #[test]
+    fn type_mismatch_reports_column_identity_and_types() {
+        for (expected_type, supplied_type, value) in [
+            (
+                DataType::Int,
+                DataType::String,
+                RowCellValue::from("wrong type"),
+            ),
+            (DataType::String, DataType::Int, RowCellValue::from(7)),
+        ] {
+            // Equal identities in different schemas let us supply a value of the wrong type.
+            let target = Schema::builder(17)
+                .column(42, "value", expected_type, 0, false)
+                .build()
+                .unwrap();
+            let source = Schema::builder(17)
+                .column(42, "value", supplied_type, 0, false)
+                .build()
+                .unwrap();
+            let row = Row::builder(&source).value(42, value).build();
+            let error = to_binary(&row, &target).unwrap_err();
+            let target_entry = entry_named(&target, "value");
+            let source_entry = entry_named(&source, "value");
+            match &error {
+                RowSerializationError::MismatchedTypes {
+                    schema_entry_id,
+                    expected,
+                    found,
+                } => {
+                    assert_eq!(*schema_entry_id, target_entry.id());
+                    assert_eq!(expected, target_entry.data_type());
+                    assert_eq!(found, source_entry.data_type());
+                }
+                other => panic!("expected type mismatch, got {other:?}"),
+            }
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "schema entry {:?} has mismatched data type: expected {}, got {}",
+                    target_entry.id(),
+                    target_entry.data_type(),
+                    source_entry.data_type(),
+                )
+            );
+        }
+    }
+
     // TC-ROW-SER-004 — Enforce the 3996-byte maximum row size
     #[test]
     fn tc_row_ser_004_maximum_size() {
@@ -690,6 +778,7 @@ mod test_cases {
         assert!(bytes[6..134].iter().all(|b| *b == 0));
         assert!(bytes[134..142].iter().all(|b| *b == 0xFF));
         assert!(bytes[142..].iter().all(|b| *b == 0));
+        assert!(from_binary(&bytes, &schema).is_ok());
     }
 
     // TC-ROW-DES-001 — Deserialize valid rows, including NULL/empty distinction and UTF-8 lengths
@@ -793,7 +882,12 @@ mod test_cases {
         bytes[2..4].copy_from_slice(&[2, 0]);
         assert!(matches!(
             from_binary(&bytes, &schema),
-            Err(RowDeserializationError::MismatchedColumnCounts)
+            Err(RowDeserializationError::MismatchedColumnCounts {
+                expected_integers: 1,
+                actual_integers: 2,
+                expected_strings: 1,
+                actual_strings: 1,
+            })
         ));
         let mut bytes = encoded_row_with_value_7_and_label_hi()[..18].to_vec();
         bytes[..2].copy_from_slice(&[0x12, 0]);
@@ -804,6 +898,31 @@ mod test_cases {
                 actual: 18
             })
         ));
+    }
+
+    #[test]
+    fn column_count_mismatch_reports_expected_and_actual_counts() {
+        let schema = schema_with_int_value_and_string_label();
+        for (header_offset, actual_integers, actual_strings) in [(2, 2, 1), (4, 1, 2)] {
+            let mut bytes = encoded_row_with_value_7_and_label_hi();
+            bytes[header_offset..header_offset + 2].copy_from_slice(&2u16.to_le_bytes());
+            let error = from_binary(&bytes, &schema).unwrap_err();
+            assert!(matches!(
+                error,
+                RowDeserializationError::MismatchedColumnCounts {
+                    expected_integers: 1,
+                    actual_integers: integers,
+                    expected_strings: 1,
+                    actual_strings: strings,
+                } if integers == actual_integers && strings == actual_strings
+            ));
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "header column counts do not match the schema: expected 1 integer and 1 string columns, got {actual_integers} integer and {actual_strings} string columns"
+                )
+            );
+        }
     }
 
     // TC-ROW-DES-004 — Reject invalid NULL representations
@@ -852,16 +971,36 @@ mod test_cases {
 
         let mut bytes = baseline.clone();
         bytes[14..18].copy_from_slice(&[5, 0, 2, 0]);
+        let error = from_binary(&bytes, &schema).unwrap_err();
         assert!(matches!(
-            from_binary(&bytes, &schema),
-            Err(RowDeserializationError::InvalidStringOffsets)
+            error,
+            RowDeserializationError::InvalidStringOffsets {
+                index: 1,
+                start_offset: 5,
+                end_offset: 2,
+                string_data_len: 5,
+            }
         ));
+        assert_eq!(
+            error.to_string(),
+            "string at index 1 has invalid byte range 5..2 in string data of length 5; offsets must be nondecreasing and within the string data"
+        );
         let mut bytes = baseline.clone();
         bytes[16..18].copy_from_slice(&[9, 0]);
+        let error = from_binary(&bytes, &schema).unwrap_err();
         assert!(matches!(
-            from_binary(&bytes, &schema),
-            Err(RowDeserializationError::InvalidStringOffsets)
+            error,
+            RowDeserializationError::InvalidStringOffsets {
+                index: 1,
+                start_offset: 2,
+                end_offset: 9,
+                string_data_len: 5,
+            }
         ));
+        assert_eq!(
+            error.to_string(),
+            "string at index 1 has invalid byte range 2..9 in string data of length 5; offsets must be nondecreasing and within the string data"
+        );
         let mut bytes = baseline;
         bytes[16..18].copy_from_slice(&[3, 0]);
         assert!(matches!(

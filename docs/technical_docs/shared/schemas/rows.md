@@ -15,10 +15,16 @@ Each `RowCell` owns its ID and value. The finished row does not borrow the schem
 ## Building a row
 
 ```rust
+use shared::schemas::data_type::DataType;
+use shared::schemas::row::{Row, RowCellValue};
+use shared::schemas::schema::Schema;
+
 let schema = Schema::builder(1)
-    .column("id", DataType::Int, 0, true)
-    .column("name", DataType::String, 1, false)
-    .build();
+    .column(0, "id", DataType::Int, 0, true)
+    .column(1, "name", DataType::String, 1, false)
+    .pk([0])
+    .build()
+    .expect("valid schema");
 let row = Row::builder(&schema)
     .value(0, 7)
     .value_named("name", RowCellValue::NULL)
