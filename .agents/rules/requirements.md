@@ -51,18 +51,21 @@ Rejected — exactly four columns:
 | BTREE-DEL-020 | Redistribution shall always prefer the left sibling. | 2026-10-11 | Sibling selection is intentionally not guaranteed. |
 ```
 
-Use ISO `YYYY-MM-DD` dates for Rejected and Superseded only. Preserve original requirement text and ID in historical rows. If a replacement does not exist, leave `Replaced By` empty rather than inventing one. Escape literal table pipes as `\|` and keep each requirement in a single Markdown table cell.
+Use ISO `YYYY-MM-DD` dates for Rejected and Superseded only. Preserve original requirement text and ID in historical rows. If a replacement does not exist, leave `Replaced By` empty rather than inventing one. Escape literal table pipes as `\|` and keep each requirement in a single Markdown table cell. Use `<br>` within a cell to format multi-clause technical contracts; never add extra table rows merely to list individual contract clauses.
 
 Sort requirements **by ID ascending** within each table (numeric suffix order, not arbitrary rearrangement). Do not reorder by topic or priority.
 
 ## Requirement wording
 
-- Each row states one independently meaningful, independently testable guarantee. Separate distinct behaviors such as borrow-left, borrow-right, merge, separator update, recursive underflow, and root collapse when they constitute separate guarantees.
+- Each row states one **cohesive behavioral or technical contract** (for example, row serialization, row deserialization, or invalid-input handling), not one requirement per field, byte offset, validation check, or assertion. Group related normative rules in the same requirement cell, even when individually testable. Split only genuinely independent contracts with different triggers, outcomes, or approval/change lifecycles.
 - Requirements may specify externally observable behavior **or** technical/internal/algorithmic behavior. Both levels are legitimate; some overlap is acceptable.
+- **Preserve the technical details in the requirement itself.** A contract cell may contain a compact, explicit numbered set of clauses using `<br>` and `1. ...` / `2. ...` within the same Markdown cell. Include exact layout, field widths/order, endianness, encodings, offsets, null semantics, boundaries, and postconditions as they are established. Do not replace precise details with vague phrases such as "according to the format", "preserves invariants", or an unspecified external document. Existing user-provided documentation may inform the clauses, but is not required and must not become a second mandatory specification artifact.
 - Specify triggering conditions, expected behavior, and meaningful invariants/postconditions precisely enough to design tests without inventing semantics.
 - Include important failure/error semantics and atomicity/consistency guarantees where relevant. Do not leave essential behavior to test designers to guess.
 - Prefer clear normative wording, commonly “shall”; avoid unnecessary ceremony or vague assertions such as “handle errors correctly” or “preserve all invariants.”
-- Do not bundle unrelated guarantees merely because they belong to the same operation.
+- Do not bundle unrelated contracts merely to minimize IDs. A contract may contain many closely related independently verifiable clauses; this does **not** imply one test per clause.
+- During proposal generation, perform a **consolidation pass**: merge fragmented field-level and rule-level requirements into cohesive contracts without deleting any established technical guarantee. Target a small number of substantive contracts, not a numeric quota.
+- If the user has not defined a critical detail, ask one focused question at a time or mark it as unresolved in Pending Review Notes. Do not invent it or spawn a separate requirement for every open question.
 - Do not add routine metadata: no priority, implementation status, test status, author, creation date, verification method, or per-row category.
 - Avoid requirement-relationship metadata (parent, depends on, related); use an explicit ID reference in requirement text only when necessary.
 

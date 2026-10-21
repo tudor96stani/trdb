@@ -10,7 +10,7 @@ We keep columns in a map keyed by their IDs and keep primary-key IDs in a separa
 
 `ObjectId` is a `u16` identifying a database object. In a `SchemaEntryId`, the `owner_id` identifies the table or index and the `column_id` identifies a column within it. Equality and hashing use both. Column 0 of owner 1 is therefore different from column 0 of owner 2.
 
-The decision log describes this pairing as a way to identify columns across tables without storing the owner's name in each ID. The two IDs use four bytes in total. When displaying a readable name, we still need to look up the owner and column metadata.
+Column IDs are generally assigned starting from 0, as they are created (first column gets its ID = 0, 2nd column ID = 1, ...).
 
 ## Columns
 

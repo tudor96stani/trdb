@@ -1,130 +1,87 @@
 # Test-case artifact contract
 
-This file defines the canonical structure, identifiers, content, and lifecycle of `docs/testcases.md`. It is shared by all testing skills. Agent role-specific behavior belongs in `SKILL.md` files, not in `docs/testcases.md`. The test-case document contains test specifications only: no agent instructions, table of contents, summary statistics, glossary, execution results, logs, or implementation paths. Use terminology defined in `docs/reqs.md`.
+This file governs `docs/testcases.md`. The document contains specifications only, not agent instructions, execution history, or implementation paths. Use `docs/reqs.md` for project terminology. Read `.agents/rules/requirements.md` when interpreting requirements.
 
-## Structure and organization
+## Structure
 
-Use these top-level sections, in order:
+Use these top-level sections in order:
 
 1. `# Test Cases`
-2. `## Active`
-3. `## Pending Implementation`
-4. `## Rejected`
+2. `## Pending Review`
+3. `## Approved`
+4. `## Active`
+5. `## Rejected`
 
-Under each lifecycle section, group by subsystem (`### B+ Tree`) and feature (`#### Deletion`) as appropriate. Cross-feature groupings are allowed. Each test appears in one primary grouping only; if placement is ambiguous, ask the user to choose. Do not duplicate tests across groupings. Within a feature, order cases by ascending numerical ID. No separate global ad-hoc/white-box section: place those tests alongside other cases for the same feature.
+Within each section group by subsystem (`### Row Storage`) and optionally feature (`#### Deserialization`). Avoid unnecessary extra hierarchy. No separate black-box, white-box, ad-hoc, or property-based sections or formats. No glossary, table of contents, status dashboards, execution results, or implementation file paths.
 
-## IDs and titles
+## Pending Review: numbered, ID-free proposals
 
-- Use short semantic IDs such as `TC-BTREE-INS-001`, `TC-BTREE-DEL-042`, and `TC-WAL-REC-012`; prefixes evolve as needed, without an elaborate taxonomy.
-- Assign the ID when a proposed test first enters `Pending Implementation`. IDs are globally unique and immutable across all lifecycle sections; never renumber or reuse an ID.
-- Moving a case between lifecycle sections preserves its ID. A materially different scenario receives a new ID; an approved, authorized revision that remains fundamentally the same scenario may keep its ID.
-- Titles may be clarified without changing IDs if the scenario's meaning is unchanged; synchronize the exact title in the Rust summary comment when it changes.
-- Use the heading `##### TC-BTREE-INS-001 — Insert and retrieve a record` under a `####` feature heading (adapt heading depth if grouping depth differs).
+- Proposed cases have **no permanent test IDs**. Use a Markdown numbered list starting at 1 within each feature grouping; numbering is local to that list, not a global identity. Include a clear title and sufficiently precise scenarios, as shown below.
+- If a proposal is removed, rejected, approved, inserted, or reordered, renumber remaining pending proposals consecutively. Numbers are temporary review handles; never use them as stable references in code or elsewhere.
+- A rejected **unapproved proposal** is simply removed from Pending Review; no permanent rejection history is necessary. The user alone decides which proposals to approve, revise, or discard.
+- Approval assigns a new immutable semantic ID (for example `TC-ROW-DES-001`) and moves the case to `## Approved`. Do not assign IDs merely because proposals have been written or discussed.
+- If the user approves only some variations within a proposal, revise/split the proposal as directed before assigning IDs; do not assume approval of unreviewed variations.
 
-## Lifecycle and approval
-
-- **Pending Implementation** contains both unreviewed proposals and user-approved scenarios waiting to be implemented. Every pending case must have `**Status:** Proposed` or `**Status:** Approved`. The user alone authorizes approval; never infer it from apparent completeness or from an agent's proposal. Test implementers may implement only `Approved` cases.
-- Pending cases may have an optional `**Notes:**` field for review questions, exact handoff details, needed helpers or infrastructure, and blockers. Notes are temporary, must not silently override the approved scenario, and are removed when a case moves to Active. A blocked approved case stays pending with a concise blocker note; no separate Blocked status.
-- **Active** means approved and implemented, regardless of whether the automated test currently passes. Remove `Status` and temporary `Notes` when moving a case to Active. Active scenarios form a stable regression baseline.
-- **Rejected** includes declined or retired scenarios. Preserve ID, title, concise original description, rejection/retirement date (`YYYY-MM-DD`), and reason; full steps are optional. There is no separate Superseded/Obsolete section.
-- If an exactly identical rejected scenario becomes relevant again, the user may reactivate the original ID: restore the scenario to Pending Implementation (Proposed or explicitly Approved), then Active after implementation. Retain the prior rejection as a **historical record only**, annotated with the reactivation date; it is not a second live test or second assignment of that ID. If the scenario changes materially, assign a new ID.
-- Proposed cases may be edited during review. Approved pending and Active specifications may not be semantically changed without explicit user authorization. Test designers may recommend changes but must not directly modify Active cases. Obvious non-semantic mechanical corrections may be made when appropriate and must be reported.
-- Requirement changes do not automatically rewrite approved tests; impact review occurs only on request. Retiring a case moves its historical specification to Rejected on user authorization.
-
-## Detailed deterministic case format
-
-Use this format for ordinary requirements-driven and other scenarios requiring ordered operations:
+Example:
 
 ```markdown
-##### TC-BTREE-INS-002 — Reject duplicate key without modifying original
+## Pending Review
+### Row Storage
+#### Deserialization
 
-**Status:** Proposed
-
-**Requirements:** BTREE-INS-001, BTREE-INS-002
-
-**Notes:** Optional; remove when implemented.
-
-**Preconditions:**
-- An empty indexed table with a unique integer key exists.
-
-| Step | Action | Expected Result |
-|---|---|---|
-| 1 | Insert `(42, 'original')`. | Insertion succeeds. |
-| 2 | Insert `(42, 'replacement')`. | A duplicate-key error is returned. |
-| 3 | Query key `42`. | Exactly one row is returned: `(42, 'original')`. |
-| 4 | Count all rows. | Exactly one row exists. |
+1. **Deserialize a valid mixed row**
+   - Given schema `[concrete schema]` and bytes `[exact bytes]`, obtain `[exact row]`.
+2. **Reject truncated binary rows**
+   - Truncated header → `[defined error category]`.
+   - Truncated integer section → `[defined error category]`.
+   - Truncated string section → `[defined error category]`.
 ```
 
-Omit `Status` and `Notes` in Active. Omit `Requirements` when no formal requirement applies. `Preconditions` and `Cleanup` are optional when not relevant, but the case must still be self-contained.
+## Approved and Active
 
-- Specify concrete inputs and exact expected results for ordinary deterministic tests. For large datasets or generated inputs, give sufficiently precise construction rules instead.
-- Numbered steps execute in the stated order. Do not skip, combine, or reorder them without user approval. Expected results belong at the relevant steps; assert intermediate state when it meaningfully verifies the scenario, not mechanically after every operation.
-- Negative tests specify the expected error type/category and important postconditions, including state preservation where required. Do not require exact error-message strings unless their text is explicitly guaranteed.
-- Restart, persistence, and crash-recovery scenarios use this same step table; specify the interruption point precisely. Document unavailable deterministic crash/fault-injection capability in pending Notes.
-- `**Cleanup:**` is optional, for exceptional cleanup only. Routine cleanup is handled by common test infrastructure and should work even when a test fails where practical.
-- No separate Purpose, Objective, Assumptions, Test Level, Implementation, or execution-results fields. Resolve assumptions into preconditions, actions, or expected results; unresolved questions may remain in pending Notes.
+- `## Approved` holds user-approved, permanently identified cases awaiting implementation, including blocked cases. `## Active` holds implemented cases even if a test currently fails because production code is defective.
+- Use a heading such as `##### TC-ROW-DES-003 — Reject truncated binary rows` under the feature grouping. IDs are globally unique, never reused, and retained across lifecycle transitions. Use a short feature-specific prefix and increasing numeric suffix; gaps are fine. Order by ID within a feature.
+- `**Requirements:** ROW-DES-001, ROW-DES-002` is optional; list only approved requirements the scenarios actually verify. Cases informed by implementation may have no requirement ID but must not contradict active requirements.
+- `**Notes:**` is optional **only in Approved**, for genuine implementation blockers or handoff questions. Remove notes on promotion to Active. Unresolved expected behavior should be clarified before approval, not disguised as implementation notes.
+- A case may contain **multiple related input variations** that verify the same meaningful behavior. Write them as numbered or bulleted scenarios with concrete inputs/construction rules and exact expected outcomes. Use a step/action/expected-result table **only when sequence and intermediate state matter**. Preconditions may be included when necessary; do not force empty boilerplate fields.
+- A case must be self-contained enough for an independent implementer to implement **without inventing behavior, test inputs that affect expectations, or assertions**. Reuse approved requirements for common technical contracts; make case-specific values and outcomes explicit. Do not require the implementer to infer intended behavior from production code.
+- Examples of grouping: header/integer/string truncations can be variations of **one** truncation case; invalid length/count/offset metadata can be variations of **one** malformed-metadata case if they share the same failure contract. Split only for meaningfully different behavior, risk, state transitions, or useful failure diagnosis.
+- **Do not require one Rust test function per documented case.** One approved case may produce multiple independently named Rust test functions (e.g., one per variation) or a well-diagnosed table-driven test. Every implemented variation must remain traceable to the parent case ID and identifiable on failure.
+- Use the case ID in test function names (lowercase snake case, e.g. `tc_row_des_003_truncated_header`) and an adjacent comment identifying the case ID and title. Multiple functions may share the same case ID prefix with distinct suffixes. Do not claim the case is fully implemented until every approved variation is covered.
+- Test functions must be isolated, independent of execution order and other tests' state. Routine setup/cleanup belongs in test infrastructure; only exceptional setup or isolation constraints belong in a case.
+- Do not add undocumented behavioral assertions. Mechanical safety/setup checks are allowed but cannot silently strengthen the specification. Fail fast and keep failures diagnosable.
+- Approved and Active cases cannot be materially changed without user approval. Nonsemantic clarification is permitted if reported and code comments remain synchronized.
 
-## Compact ad-hoc/white-box case format
-
-A small, targeted case may omit formal Preconditions and the step table, but it must still be clear, concise, self-sufficient, and unambiguous:
+Example approved case:
 
 ```markdown
-##### TC-BTREE-DEL-042 — Redistribute from left sibling
+##### TC-ROW-DES-003 — Reject truncated binary rows
 
-**Status:** Proposed
+**Requirements:** ROW-DES-002
 
-Construct an underfull leaf whose left sibling can donate an entry. Perform redistribution and verify that both nodes meet minimum occupancy, entries remain ordered, and the parent separator reflects the new boundary.
+**Scenarios:**
+1. Header is shorter than its required width → deserialization returns the specified truncated-input error.
+2. Header is complete but integer payload ends early → the same error.
+3. All earlier sections are complete but string bytes end early → the same error.
 ```
 
-Add `**Requirements:** ...` if the case genuinely verifies active requirements; otherwise omit it. If a specific key sequence, node capacity, internal layout, or boundary is essential to trigger the path, specify it explicitly; do not leave the implementer to invent test intent or expected results. Implementation-specific assertions (including physical page offsets) are allowed when relevant to this database's actual design. Explain why a magic value matters in the case or in Rust comments. Rust comments may clarify *how* a documented assertion works, never introduce additional behavioral expectations.
+This is a **format illustration**, not an assumption about this project's actual error semantics. Replace placeholders with approved, precise behavior.
 
-## Property-based / generative case format
+## Rejected / retired approved cases
 
-Property tests use the same ID and lifecycle rules, but replace the step table with generation rules, properties, and reproducibility:
+Only previously approved cases need historical retirement tracking. Retain their permanent ID, title, a concise description, retirement date (`YYYY-MM-DD`), and reason in `## Rejected`. Retire only on explicit user authorization. Reinstatement requires explicit user approval; reuse an ID only for the genuinely same scenario, otherwise assign a new ID. Do not automatically retire or rewrite cases when requirements change; report the impact.
 
-```markdown
-##### TC-BTREE-INS-015 — Randomized insertion preserves lookup
+## Coverage and scope
 
-**Status:** Proposed
+- **Optimize for meaningful scenario and failure-mode coverage, not number of test cases or requirement clauses.** Before presenting proposals, consolidate redundant or mechanically similar cases. Avoid a separate case for each field, validation branch, offset, error variant, or boundary unless it exposes distinct behavior or risk.
+- A small set of cases can contain many variations. Never omit an important behavior just to meet an arbitrary count. Explain genuinely uncovered risks rather than inflating the list with low-value duplicates.
+- Default to deterministic correctness testing. **Do not propose property-based, randomized, or generative testing** unless the user explicitly changes this policy.
+- No separate formal/ad-hoc distinction: all cases follow the same scenario-based format. Implementation-informed checks must still be intentional, approved, and precise. Prefer a few representative internal risk paths over exhaustive branch enumeration.
+- No blanket obligation to create a case for every requirement clause, or a function for every case. Traceability is many-to-many. Avoid large end-to-end flows unless the user requests them or they are the clearest way to verify a meaningful guarantee.
+- When requirements leave expected behavior undefined, ask the user or report a requirements gap. Do not fabricate it or treat observed implementation behavior as normative.
 
-**Requirements:** BTREE-INS-001, BTREE-INS-002
+## Authority and implementation restrictions
 
-**Preconditions:**
-- An empty indexed table exists.
+User decisions > approved Active requirements > approved test cases > automated tests > implementation. Pending requirements and test proposals are not authoritative. Report contradictions instead of silently resolving them.
 
-**Input generation:**
-- Generate 1–1,000 unique integer keys with associated values.
-- Randomize insertion order.
-
-**Properties:**
-1. Every inserted key retrieves its associated value.
-2. No additional keys are returned.
-3. The row count equals the number of unique inserted keys.
-
-**Reproducibility:**
-- Preserve/report the random seed and sufficient inputs to reproduce failures.
-```
-
-Property tests remain in the suite after finding defects. A meaningful randomized failure should additionally produce a separate deterministic regression scenario, ideally minimized, through the normal proposal/approval process. Failure minimization may be handled by a separate analysis workflow.
-
-## Requirement references and coverage
-
-- `**Requirements:**` lists **all** Active requirement IDs genuinely verified, directly or indirectly, not merely exercised. A case may cover several requirements; several cases may cover the same requirement.
-- Only refer to Pending Review requirements when the user explicitly requests designing against them. Such cases remain Proposed until the relevant requirements are approved.
-- Do not fabricate expected behavior for missing or ambiguous requirements. Report the gap separately, and formalize expected behavior before adding a requirements-backed case. The user may explicitly approve an ad-hoc case instead of formalizing implementation-specific behavior.
-- Requirements-driven black-box design does not inspect production code, but may target precise project-specific behavior defined by requirements. White-box design may inspect the current implementation and propose either requirements or ad-hoc tests.
-- No reverse traceability matrix and no test-to-test references or dependencies. Each specification must be independently understandable; repeat necessary data rather than referring to other cases or shared Markdown fixtures.
-
-## Scenario size, independence, and implementation
-
-- Default to small, focused, independently diagnosable scenarios. Large functional/cross-feature flows are a special case **only on user request**. Scenario coherence takes priority over maximizing requirements per test; avoid redundant cases while permitting meaningful overlap. Dependent flows fail fast.
-- Prefer separate cases and Rust test functions over parameterized test cases, even for related deterministic variations. Property-based tests are the exception.
-- Each test must establish its own state (directly or through approved setup helpers) and must not depend on another test's execution order, side effects, or leftover data. This is a universal rule, not repeated in each specification. Routine setup and cleanup mechanics do not need documenting in every case.
-- The default is **one documented case = one Rust test function**. A function may orchestrate subprocesses/restarts. If splitting into several functions would be necessary, ask the user first.
-- Each Rust test function name includes the corresponding test ID converted to lowercase snake_case, e.g. `tc_btree_ins_001_insert_and_retrieve_record`. Immediately above the test, include a summary comment with the **exact documented ID and title**, e.g. `// TC-BTREE-INS-001 — Insert and retrieve a record`. If several functions are explicitly approved for one case, each carries the same ID prefix and matching summary comment.
-- Implement documented assertions **only**: no extra undocumented behavioral assertions, even if they seem useful. Propose additions for approval and update the specification first. Mechanical setup checks required for safe execution are allowed, but must not introduce extra behavioral expectations.
-- Faithfully preserve deterministic step order, inputs, and expectations. Use existing good test helpers; propose new or changed shared helpers, fixtures, fault injection, setup/teardown, or other infrastructure before implementing them. Helpers should abstract mechanics, not hide scenario intent.
-- Test level (unit/component/server integration/CLI) is selected during design/implementation review, not permanent test-case metadata. The scenario drives the level. Server behavior is the main focus; full client/server coverage can be smaller.
-- A valuable test that is currently unimplementable should **still be proposed with complete steps and expected results** and a pending Notes blocker identifying the missing capability. Do not silently implement a weaker approximation. If blocked, leave it pending and continue unrelated approved cases.
-- Once a faithful test is implemented, move it to Active even if production behavior fails; report that failure separately and never modify production code to make it pass. The test implementer may run newly implemented tests, but `docs/testcases.md` never records execution results.
-- Existing undocumented Rust tests remain untouched unless the user requests otherwise or the specific task requires changes. An on-demand suite review may report them and propose documentation, but must not automatically rename, rewrite, delete, or migrate them.
+Only the user approves cases. Test designers propose; test implementers implement only Approved cases, never change production code, and must seek approval before changing shared test infrastructure. A blocked case stays Approved with a short Note while other cases continue. A test that is fully implemented but fails due to a production bug belongs in Active, with the failure reported. Existing undocumented tests are not automatically rewritten or removed.

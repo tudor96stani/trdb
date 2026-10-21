@@ -9,6 +9,7 @@ These instructions apply when writing or editing technical documentation under `
 - Use technical documentation to describe behavior, formats, constraints and relevant reasoning. Do not automatically add decision log entries or implementation notes as part of this work.
 - Document how the component behaves, how it is implemented and why it is designed that way. Technical docs are not a code review or bug backlog: do not include implementation faults, missing checks, broken edge cases, correctness warnings or lists of shortcomings. Bugs belong in a task tracking tool, not in these documents. Do not investigate the code for new issues as part of a documentation review unless explicitly asked.
 - Keep normal API errors, supported scope and caller responsibilities when they explain how to use the component. State them as behavior or contracts, without turning them into criticism of the implementation. Keep unfinished features clearly marked rather than describing them as working.
+- Documentation should be self-contained - meaning do not reference documents outside of the `technical_docs` folder
 
 ## Voice and phrasing
 
