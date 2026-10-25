@@ -12,3 +12,6 @@ docs/.obsidian/app.json
 
 # Local pre-PR and audit reports
 /.review/
+
+# Python bytecode caches (skill helper scripts)
+__pycache__/
