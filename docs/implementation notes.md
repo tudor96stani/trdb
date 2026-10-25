@@ -3,6 +3,32 @@ created: 2026-04-21
 ---
 **This mostly contains random notes taken during development. Ignore Origin references for each note, mostly used for linking in my main Obsidian vault**
 
+## 261024-1259 sys tables & catalog
+Went through how to actually implement the sys tables: create them at first startup, load them at every startup after that, and keep their contents cached in memory as proper structs (`Table`, `Index`, `Constraint`, `Database`, plus the existing `Schema`), not as `Row`s.
+
+**Sys operations: operators or services?**
+In Java, loading the sys tables at startup just built a `HeapScan` operator and ran it like any user query. Same idea for creating them. Long term I still lean towards that, since it means the heap insert logic only lives in the `HeapInsert` operator and not in a separate copy that only knows about the sys tables. But we don't have a query engine yet, so for now the startup/system logic does it "manually" with a few basic operator-like functions (scan, insert, delete, init file). Once the real operators exist, the internals get replaced and the API stays.
+
+**Heap layout**
+Pretty close to Java. The header is at page 0. For a heap it lists the directory pages (for a B+tree it will just point to the root). Directory pages list the data pages and their free space. We store page numbers, not offsets, since offset = page number * 4096. The next page ID is the max of all known page IDs (header, every directory page, every data page) + 1. You have to remember the directory pages here, otherwise a new data page can get the same ID as the last directory page. The heap is capped by how many directory pages fit in the header. Could chain directory pages instead, but heaps aren't the priority, clustered tables are.
+Storage only creates empty files and allocates pages. The heap layer decides page 0 is the header and page 1 is the first directory. Header and directory rows use fixed internal schemas, so they have to be decoded in engine, not storage.
+
+**Startup without WAL**
+A `CREATE TABLE` is a bunch of separate writes (file, header, directory, `sys.tables` row, `sys.schemas` rows, ...). Kill the server in the middle and the next startup finds a mess. Repairing that properly needs WAL + recovery, so for now: orphan files and orphan db folders are deleted with a warning (I'd rather not put overwrite logic in file creation, since it won't be in the final product), and anything else is fatal, so wipe the data dir. If that gets annoying, maybe a temporary diagnostic mode at startup that asks in the CLI what to do with the broken rows. Not doing that unless I really need it.
+
+**Catalog: copy or shared?**
+Shared. A connection should see the latest catalog, and a copy goes stale as soon as someone else runs DDL. The entries are immutable `Arc`s that DDL replaces, so a running query keeps its own `Arc` even if the table gets dropped, and readers only lock long enough to clone. Once we have transactions, only *when* the swap happens changes (on commit). Rough idea for later: each connection gets a `ConnectionContext` with references to the shared state it needs.
+
+**Still open**
+- PK in `sys.schemas`: an `is_pk` flag (not enough to rebuild key order), a nullable `pk_pos`, or nothing and derive it from the clustered index in `sys.indexes`
+- whether `StorageManager` stays generic over the file manager
+- which engine parts are free functions and which are structs with state, decided per component
+
+#### Origin
+- grill-me session `2026-10-24 sys tables implementation`
+
+---
+
 ## 261011-1050 Additional AI
 Also added some skills to help me write requirements for the functionality - mostly a grill me type thing which will generate the actual reqs, along with a skill that will propose test cases based on those reqs (black box testing) + one that will propose test cases (full or one-liners) based on actual implementation to cover edge cases (white box) + one skill to implement the test cases documented in there. 
 None should alter the codebase in any way (actual codebase I mean). Each step gated by some manual review.

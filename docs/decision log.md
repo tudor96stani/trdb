@@ -5,6 +5,17 @@ created: 2026-04-21
 
 ---
 
+## 261024-1259 sys tables, heap layout & in-memory catalog
+**Decision**: Storage stays page-only: it creates empty files and allocates pages, and never interprets what's in them. The heap structure lives in `engine`. Page 0 is the file header and lists the directory pages; directory pages list the data pages with their free space. The heap layer picks new page IDs (max of every known page ID + 1, including header and directory pages). The header can only list so many directory pages, so heaps are capped in size, which is fine since most of the work will go to clustered tables, where the header just points to the B+tree root. Until we have a query engine, scan/insert/delete/init on heaps are done by temporary "manual operators" in engine, which should later be swapped for real operators behind the same API. No WAL yet, so pages are flushed right after they change.
+
+At startup only two states are valid: an empty data dir (first boot, create `master` and its sys tables) or a fully consistent one. Orphan files and orphan database folders get deleted with a warning; anything else inconsistent is a fatal error, and the fix is to wipe the data dir. The sys table contents are cached in a server-wide `Catalog` (defined in engine, held by `EngineEnvironment`), split per database. Entries are immutable `Arc`s that DDL swaps in after everything is written to disk (the file catalog entry for a new file gets registered before writing it). Disk is the source of truth. Sys tables are part of the catalog too, marked as system. Locking is coarse for now: instance lock for `CREATE DATABASE`, database lock for `CREATE TABLE`, table locks for everything else (exclusive for writes and `DROP`).
+
+Sys table formats: `sys.indexes` stores key columns as an ordered comma-separated string of column IDs, and is the source of truth for the PK (the PK row in `sys.constraints` is just metadata). FKs are single-column only and store their own column plus the referenced table and column. `sys.schemas` stores a stable small-int type code, a max length and nullable, so `SchemaEntry` gets `nullable` and `DataType` gets a max length for strings. Bootstrap is one engine function and replaces `setup_test_data`.
+#### Context
+- [261024-1259 sys tables & catalog](implementation%20notes.md#261024-1259-sys-tables--catalog)
+
+---
+
 ## 261021-1800 object identifier slight redesign
 Decided to add database IDs now instead of later. DatabaseId is the only ID unique across the server, and `master (ID 1)` is a normal database that also holds `sys.databases`. Every other ID is scoped to its database. Tables and nonclustered indexes share one ID pool per database, and we will keep the same approach as in the Java db with one file per object, so the file ID is just the object ID. A clustered index shares its table's ID (same as Java). Columns and constraints are local to their table. Pages are identified by `(db_id, file_id, page_number)`. Sys tables have the same hardcoded IDs and file names in every database and don't list themselves. Each database has its own folder, and user files get readable names stored in the sys rows.
 
