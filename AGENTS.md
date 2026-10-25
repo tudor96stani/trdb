@@ -5,6 +5,12 @@ When requirements are mentioned, locate them in `docs/reqs.md`. Only requirement
 
 Do not load the file for tasks that do not mandate it. 
 
+## Grill-me sessions
+
+Past grill-me sessions are archived outside this repo: from the repo root, go one folder back, then into `ai/trdb/grillme/`. They hold the reasoning behind decisions, the options that were rejected and what was left open.
+
+Do not load them by default. Consult them only when you need the reasoning or rejected options behind a decision, or before a grill-me session on a related topic. Read the `README.md` index there first, then open only the matching sessions, and within a session only the relevant area or its `Outcome` section. The decision log, the implementation notes and the current docs take precedence over a session.
+
 ## Documentation
 
 When a task involves writing, editing or reviewing technical documentation under `docs/technical_docs/`, or updating the documentation instructions, read and follow [Documentation instructions](.agents/rules/documentation.md) before starting that work.
@@ -13,37 +19,26 @@ Do not load that file for tasks that do not involve technical documentation or i
 
 ## Project overview
 
-TRDB is a relational database engine written in Rust, rewriting an earlier Java learning project. The workspace uses Rust edition 2024 and Cargo resolver 3. It is under active development; check the implementation before assuming a complete SQL engine or client protocol exists.
+TRDB is a relational database engine written in Rust, rewriting an earlier Java learning project. It is under active development; check the implementation before assuming a complete SQL engine or client protocol exists.
 
 ## Repository layout
 
-- `apps/trdb`: Tokio-based database server, configuration loading, logging, and engine environment setup.
-- `apps/trdbcmd`: Tokio-based CLI client for the server.
 - `crates/storage`: Storage manager, buffer cache and guards, file management, and slotted data pages. Pages are 4096 bytes. Page code separates `layout`, `metadata`, and `behavior`.
-- `crates/engine`: Relational engine code, currently including row encoding and decoding.
-- `crates/shared`: Shared schema and row types, data types, and binary helpers.
 - `docs/README.md`: Documentation index. `docs/roadmap.md`, `docs/decision log.md`, and `docs/implementation notes.md` provide project context.
-- `.github/workflows`: CI linting, test coverage, and Rustdoc publishing.
-- `.githooks/pre-commit`: Local validation hook.
 
 Keep changes within the relevant crate or module. Shared types and binary utilities belong in `shared`; storage internals belong in `storage`; row interpretation belongs in `engine`.
 
 ## Development and validation
 
-Run commands from the workspace root. CI uses stable Rust with Rustfmt and Clippy.
+Run commands from the workspace root.
 
-- Build: `cargo build --workspace`
-- Test the workspace: `cargo test --workspace`
-- Test a specific crate: `cargo test -p storage` (or `engine`, `shared`, `trdb`, `trdbcmd`)
-- Check formatting: `cargo fmt --all -- --check`
-- Apply formatting: `cargo fmt --all`
 - Lint as CI does: `cargo clippy --all-targets --all-features -- -D warnings`
 - Coverage, with `cargo-llvm-cov` installed: `cargo llvm-cov --summary-only`
 - Build documentation as the publishing workflow does: `cargo doc --no-deps --release --workspace --all-features --document-private-items`
 
 For code changes, run relevant tests and the formatting and lint checks. Tests generally live beside the implementation in `#[cfg(test)]` modules; storage page scenarios also live in `crates/storage/src/page/tests/`. Follow existing test organization and use temporary directories for tests that write database files.
 
-Follow the workspace lints in `Cargo.toml` and formatting settings in `rustfmt.toml` (100-column width and field initialization shorthand). Unsafe code is forbidden. Add Rustdoc for public APIs and preserve existing error-handling conventions using the crate error types and `thiserror`.
+Unsafe code is forbidden. Add Rustdoc for public APIs and preserve existing error-handling conventions using the crate error types and `thiserror`.
 
 ## Running locally
 
