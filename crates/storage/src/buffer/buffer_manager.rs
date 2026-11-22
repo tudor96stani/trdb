@@ -568,8 +568,8 @@ mod tests {
         } // frames[0] released here.
 
         // Now mark all frames as occupied and ensure None is returned
-        for i in 0..3 {
-            let mut w = buffer.frames[i].page_id.write().unwrap();
+        for (i, frame) in buffer.frames.iter().enumerate() {
+            let mut w = frame.page_id.write().unwrap();
             *w = Some(PageId::new(DatabaseId::new(1), i as u16, i as u32));
         }
         let none_result = buffer.claim_free_frame(PageId::new(DatabaseId::new(1), 99, 99));
