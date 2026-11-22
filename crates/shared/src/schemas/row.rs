@@ -195,8 +195,8 @@ mod row_builder_tests {
     #[test]
     fn test_row_builder_creates_cells_from_column_ids() {
         let schema = Schema::builder(1)
-            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
-            .column(ColumnId::new(1), "name", DataType::String, 1, false)
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true, false)
+            .column(ColumnId::new(1), "name", DataType::String, 1, false, false)
             .pk([ColumnId::new(0)])
             .build()
             .unwrap();
@@ -221,9 +221,9 @@ mod row_builder_tests {
     #[test]
     fn test_row_builder_creates_cells_from_schema_entries_positions_and_names() {
         let schema = Schema::builder(1)
-            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
-            .column(ColumnId::new(1), "name", DataType::String, 1, false)
-            .column(ColumnId::new(2), "email", DataType::String, 2, false)
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true, false)
+            .column(ColumnId::new(1), "name", DataType::String, 1, false, false)
+            .column(ColumnId::new(2), "email", DataType::String, 2, false, true)
             .pk([ColumnId::new(0)])
             .build()
             .unwrap();

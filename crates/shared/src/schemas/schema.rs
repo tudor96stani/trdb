@@ -69,6 +69,8 @@ pub struct SchemaEntry {
     position: usize,
     /// Flag indicating whether column is part of the primary key
     is_pk: bool,
+    /// Flag indicating whether the column accepts NULL values
+    nullable: bool,
 }
 
 impl SchemaEntry {
@@ -79,6 +81,7 @@ impl SchemaEntry {
         data_type: DataType,
         position: usize,
         is_pk: bool,
+        nullable: bool,
     ) -> Self {
         Self {
             id,
@@ -86,6 +89,7 @@ impl SchemaEntry {
             data_type,
             position,
             is_pk,
+            nullable,
         }
     }
 
@@ -112,6 +116,11 @@ impl SchemaEntry {
     /// Returns whether this schema entry is part of the primary key.
     pub fn is_pk(&self) -> bool {
         self.is_pk
+    }
+
+    /// Returns whether this schema entry accepts NULL values.
+    pub fn is_nullable(&self) -> bool {
+        self.nullable
     }
 
     /// Returns a boolean indicating whether the schema entry (column) is fixed sized or not.
@@ -244,6 +253,7 @@ impl SchemaBuilder {
         data_type: DataType,
         position: usize,
         is_pk: bool,
+        nullable: bool,
     ) -> Self {
         let id = SchemaEntryId::new(self.owner_id, column_id);
         self.columns.push(SchemaEntry::new(
@@ -252,6 +262,7 @@ impl SchemaBuilder {
             data_type,
             position,
             is_pk,
+            nullable,
         ));
         self
     }
@@ -355,8 +366,8 @@ mod schema_builder_tests {
     fn test_schema_builder_creates_schema_entries_with_explicit_ids() {
         let owner_id = 42;
         let schema = Schema::builder(owner_id)
-            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
-            .column(ColumnId::new(1), "name", DataType::String, 1, false)
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true, false)
+            .column(ColumnId::new(1), "name", DataType::String, 1, false, false)
             .pk([ColumnId::new(0)])
             .build()
             .unwrap();
@@ -387,9 +398,9 @@ mod schema_builder_tests {
     fn test_schema_builder_preserves_supplied_primary_key_order() {
         let owner_id = 42;
         let schema = Schema::builder(owner_id)
-            .column(ColumnId::new(0), "name", DataType::String, 2, true)
-            .column(ColumnId::new(1), "tenant_id", DataType::Int, 0, true)
-            .column(ColumnId::new(2), "id", DataType::Int, 1, true)
+            .column(ColumnId::new(0), "name", DataType::String, 2, true, false)
+            .column(ColumnId::new(1), "tenant_id", DataType::Int, 0, true, false)
+            .column(ColumnId::new(2), "id", DataType::Int, 1, true, false)
             .pk([ColumnId::new(2), ColumnId::new(0), ColumnId::new(1)])
             .build()
             .unwrap();
@@ -436,6 +447,7 @@ mod schema_builder_tests {
                     DataType::Int,
                     position,
                     false,
+                    false,
                 );
             }
             let result = builder.build();
@@ -461,8 +473,8 @@ mod schema_builder_tests {
             ("a-b", "a_b", false),
         ] {
             let result = Schema::builder(1)
-                .column(ColumnId::new(0), first, DataType::Int, 0, false)
-                .column(ColumnId::new(1), second, DataType::String, 1, false)
+                .column(ColumnId::new(0), first, DataType::Int, 0, false, false)
+                .column(ColumnId::new(1), second, DataType::String, 1, false, false)
                 .build();
             if duplicate {
                 assert_eq!(
@@ -487,8 +499,15 @@ mod schema_builder_tests {
     #[test]
     fn duplicate_ids_are_rejected_without_overwriting_columns() {
         let error = Schema::builder(1)
-            .column(ColumnId::new(0), "first", DataType::Int, 0, true)
-            .column(ColumnId::new(0), "second", DataType::String, 1, false)
+            .column(ColumnId::new(0), "first", DataType::Int, 0, true, false)
+            .column(
+                ColumnId::new(0),
+                "second",
+                DataType::String,
+                1,
+                false,
+                false,
+            )
             .build()
             .unwrap_err();
         assert_eq!(
@@ -502,8 +521,15 @@ mod schema_builder_tests {
     #[test]
     fn duplicate_positions_are_rejected_even_with_distinct_ids() {
         let error = Schema::builder(1)
-            .column(ColumnId::new(0), "first", DataType::Int, 0, false)
-            .column(ColumnId::new(1), "second", DataType::String, 0, false)
+            .column(ColumnId::new(0), "first", DataType::Int, 0, false, false)
+            .column(
+                ColumnId::new(1),
+                "second",
+                DataType::String,
+                0,
+                false,
+                false,
+            )
             .build()
             .unwrap_err();
         assert_eq!(error, SchemaError::DuplicateColumnPosition { position: 0 });
@@ -513,12 +539,13 @@ mod schema_builder_tests {
     fn gaps_and_out_of_range_positions_are_rejected_without_panicking() {
         for position in [2, 64, usize::MAX] {
             let error = Schema::builder(1)
-                .column(ColumnId::new(0), "first", DataType::Int, 0, false)
+                .column(ColumnId::new(0), "first", DataType::Int, 0, false, false)
                 .column(
                     ColumnId::new(1),
                     "second",
                     DataType::String,
                     position,
+                    false,
                     false,
                 )
                 .build()
@@ -529,7 +556,7 @@ mod schema_builder_tests {
             );
         }
         let error = Schema::builder(1)
-            .column(ColumnId::new(0), "first", DataType::Int, 1, false)
+            .column(ColumnId::new(0), "first", DataType::Int, 1, false, false)
             .build()
             .unwrap_err();
         assert_eq!(
@@ -544,7 +571,7 @@ mod schema_builder_tests {
     #[test]
     fn primary_key_flag_requires_an_explicit_ordering_list() {
         let error = Schema::builder(42)
-            .column(ColumnId::new(0), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(0), "id", DataType::Int, 0, true, false)
             .build()
             .unwrap_err();
         assert_eq!(error, SchemaError::MissingPrimaryKeyOrder);
@@ -553,7 +580,7 @@ mod schema_builder_tests {
     #[test]
     fn schema_without_primary_key_flags_needs_no_ordering_list() {
         let schema = Schema::builder(42)
-            .column(ColumnId::new(0), "name", DataType::String, 0, false)
+            .column(ColumnId::new(0), "name", DataType::String, 0, false, false)
             .build()
             .unwrap();
         assert!(schema.primary_keys().is_empty());
@@ -563,7 +590,7 @@ mod schema_builder_tests {
     #[test]
     fn explicitly_empty_primary_key_list_is_preserved() {
         let schema = Schema::builder(42)
-            .column(ColumnId::new(0), "id", DataType::Int, 0, false)
+            .column(ColumnId::new(0), "id", DataType::Int, 0, false, false)
             .pk([])
             .build()
             .unwrap();
@@ -574,7 +601,7 @@ mod schema_builder_tests {
     #[test]
     fn unknown_primary_key_ids_are_rejected() {
         let error = Schema::builder(42)
-            .column(ColumnId::new(7), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(7), "id", DataType::Int, 0, true, false)
             .pk([ColumnId::new(7), ColumnId::new(99)])
             .build()
             .unwrap_err();
@@ -589,7 +616,7 @@ mod schema_builder_tests {
     #[test]
     fn duplicate_primary_key_ids_are_rejected() {
         let error = Schema::builder(42)
-            .column(ColumnId::new(7), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(7), "id", DataType::Int, 0, true, false)
             .pk([ColumnId::new(7), ColumnId::new(7)])
             .build()
             .unwrap_err();
@@ -605,8 +632,8 @@ mod schema_builder_tests {
     fn omitted_primary_key_ids_are_rejected_including_empty_lists() {
         for keys in [vec![], vec![7]] {
             let error = Schema::builder(42)
-                .column(ColumnId::new(7), "tenant_id", DataType::Int, 0, true)
-                .column(ColumnId::new(99), "id", DataType::Int, 1, true)
+                .column(ColumnId::new(7), "tenant_id", DataType::Int, 0, true, false)
+                .column(ColumnId::new(99), "id", DataType::Int, 1, true, false)
                 .pk(keys.iter().map(|id| ColumnId::new(*id)).collect::<Vec<_>>())
                 .build()
                 .unwrap_err();
@@ -624,8 +651,8 @@ mod schema_builder_tests {
     fn unflagged_primary_key_ids_are_rejected() {
         for flagged in [false, true] {
             let error = Schema::builder(42)
-                .column(ColumnId::new(7), "id", DataType::Int, 0, flagged)
-                .column(ColumnId::new(99), "name", DataType::String, 1, false)
+                .column(ColumnId::new(7), "id", DataType::Int, 0, flagged, false)
+                .column(ColumnId::new(99), "name", DataType::String, 1, false, false)
                 .pk(if flagged {
                     vec![ColumnId::new(7), ColumnId::new(99)]
                 } else {
@@ -645,15 +672,16 @@ mod schema_builder_tests {
     #[test]
     fn sparse_column_ids_are_independent_of_positions_and_primary_key_order() {
         let schema = Schema::builder(42)
-            .column(ColumnId::new(99), "Name", DataType::String, 1, true)
+            .column(ColumnId::new(99), "Name", DataType::String, 1, true, false)
             .column(
                 ColumnId::new(ObjectId::MAX),
                 "value",
                 DataType::Int,
                 2,
                 false,
+                false,
             )
-            .column(ColumnId::new(7), "id", DataType::Int, 0, true)
+            .column(ColumnId::new(7), "id", DataType::Int, 0, true, false)
             .pk([ColumnId::new(99), ColumnId::new(7)])
             .build()
             .unwrap();
@@ -686,8 +714,8 @@ mod schema_builder_tests {
         let schema = Schema::builder(42)
             .pk(vec![ColumnId::new(0), ColumnId::new(1)])
             .pk([ColumnId::new(1), ColumnId::new(0)])
-            .column(ColumnId::new(0), "first", DataType::Int, 0, true)
-            .column(ColumnId::new(1), "second", DataType::String, 1, true)
+            .column(ColumnId::new(0), "first", DataType::Int, 0, true, false)
+            .column(ColumnId::new(1), "second", DataType::String, 1, true, false)
             .build()
             .unwrap();
         assert_eq!(
@@ -718,7 +746,7 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_002_accept_a_one_column_schema() {
         let schema = Schema::builder(17)
-            .column(ColumnId::new(42), "Value", DataType::Int, 0, false)
+            .column(ColumnId::new(42), "Value", DataType::Int, 0, false, true)
             .build()
             .unwrap();
 
@@ -734,6 +762,7 @@ mod test_cases {
         assert_eq!(entry.data_type(), &DataType::Int);
         assert_eq!(entry.position(), 0);
         assert!(!entry.is_pk());
+        assert!(entry.is_nullable());
     }
 
     // TC-SCHEMA-BLD-003 — Accept the maximum column count
@@ -752,6 +781,7 @@ mod test_cases {
                 },
                 p,
                 false,
+                p % 3 == 0,
             );
         }
         let schema = builder.build().unwrap();
@@ -777,6 +807,7 @@ mod test_cases {
             );
             assert_eq!(entry.position(), p);
             assert!(!entry.is_pk());
+            assert_eq!(entry.is_nullable(), p % 3 == 0);
         }
     }
 
@@ -792,6 +823,7 @@ mod test_cases {
                 DataType::Int,
                 p,
                 false,
+                false,
             );
         }
         assert_eq!(
@@ -805,8 +837,8 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_005_reject_exactly_duplicated_column_names() {
         let result = Schema::builder(17)
-            .column(ColumnId::new(42), "value", DataType::Int, 0, false)
-            .column(ColumnId::new(7), "value", DataType::String, 1, false)
+            .column(ColumnId::new(42), "value", DataType::Int, 0, false, false)
+            .column(ColumnId::new(7), "value", DataType::String, 1, false, false)
             .build();
         assert!(matches!(
             result,
@@ -819,8 +851,22 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_006_reject_ascii_case_variants_of_a_column_name() {
         let result = Schema::builder(17)
-            .column(ColumnId::new(42), "AccountID", DataType::Int, 0, false)
-            .column(ColumnId::new(7), "aCCOUNTid", DataType::String, 1, false)
+            .column(
+                ColumnId::new(42),
+                "AccountID",
+                DataType::Int,
+                0,
+                false,
+                false,
+            )
+            .column(
+                ColumnId::new(7),
+                "aCCOUNTid",
+                DataType::String,
+                1,
+                false,
+                false,
+            )
             .build();
         assert!(matches!(
             result,
@@ -833,8 +879,15 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_010_reject_duplicate_column_ids_with_distinct_metadata() {
         let error = Schema::builder(17)
-            .column(ColumnId::new(42), "first", DataType::Int, 0, false)
-            .column(ColumnId::new(42), "second", DataType::String, 1, false)
+            .column(ColumnId::new(42), "first", DataType::Int, 0, false, false)
+            .column(
+                ColumnId::new(42),
+                "second",
+                DataType::String,
+                1,
+                false,
+                false,
+            )
             .build()
             .unwrap_err();
         assert_eq!(
@@ -850,9 +903,16 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_011_reject_duplicate_positions_within_the_valid_range() {
         let error = Schema::builder(17)
-            .column(ColumnId::new(42), "first", DataType::Int, 0, false)
-            .column(ColumnId::new(7), "second", DataType::String, 1, false)
-            .column(ColumnId::new(100), "third", DataType::Int, 1, false)
+            .column(ColumnId::new(42), "first", DataType::Int, 0, false, false)
+            .column(
+                ColumnId::new(7),
+                "second",
+                DataType::String,
+                1,
+                false,
+                false,
+            )
+            .column(ColumnId::new(100), "third", DataType::Int, 1, false, false)
             .build()
             .unwrap_err();
         assert_eq!(error, SchemaError::DuplicateColumnPosition { position: 1 });
@@ -863,9 +923,16 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_012_reject_a_position_equal_to_the_column_count() {
         let error = Schema::builder(17)
-            .column(ColumnId::new(42), "first", DataType::Int, 0, false)
-            .column(ColumnId::new(7), "second", DataType::String, 1, false)
-            .column(ColumnId::new(100), "third", DataType::Int, 3, false)
+            .column(ColumnId::new(42), "first", DataType::Int, 0, false, false)
+            .column(
+                ColumnId::new(7),
+                "second",
+                DataType::String,
+                1,
+                false,
+                false,
+            )
+            .column(ColumnId::new(100), "third", DataType::Int, 3, false, false)
             .build()
             .unwrap_err();
         assert_eq!(
@@ -882,19 +949,26 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_014_preserve_independent_ids_and_explicit_composite_primary_key_order() {
         let schema = Schema::builder(17)
-            .column(ColumnId::new(42), "Tenant", DataType::Int, 2, true)
-            .column(ColumnId::new(7), "Label", DataType::String, 0, false)
-            .column(ColumnId::new(100), "Record", DataType::String, 1, true)
+            .column(ColumnId::new(42), "Tenant", DataType::Int, 2, true, false)
+            .column(ColumnId::new(7), "Label", DataType::String, 0, false, true)
+            .column(
+                ColumnId::new(100),
+                "Record",
+                DataType::String,
+                1,
+                true,
+                false,
+            )
             .pk(vec![ColumnId::new(100), ColumnId::new(42)])
             .build()
             .unwrap();
 
         assert_eq!(schema.owner_id(), 17);
         assert_eq!(schema.columns().len(), 3);
-        for (column_id, name, data_type, position, is_pk) in [
-            (42, "Tenant", DataType::Int, 2, true),
-            (7, "Label", DataType::String, 0, false),
-            (100, "Record", DataType::String, 1, true),
+        for (column_id, name, data_type, position, is_pk, nullable) in [
+            (42, "Tenant", DataType::Int, 2, true, false),
+            (7, "Label", DataType::String, 0, false, true),
+            (100, "Record", DataType::String, 1, true, false),
         ] {
             let entry = schema
                 .columns()
@@ -906,6 +980,7 @@ mod test_cases {
             assert_eq!(entry.data_type(), &data_type);
             assert_eq!(entry.position(), position);
             assert_eq!(entry.is_pk(), is_pk);
+            assert_eq!(entry.is_nullable(), nullable);
         }
 
         assert_eq!(
@@ -923,8 +998,15 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_016_require_an_ordering_list_when_any_column_is_a_primary_key() {
         let error = Schema::builder(17)
-            .column(ColumnId::new(42), "label", DataType::String, 0, false)
-            .column(ColumnId::new(7), "key", DataType::Int, 1, true)
+            .column(
+                ColumnId::new(42),
+                "label",
+                DataType::String,
+                0,
+                false,
+                false,
+            )
+            .column(ColumnId::new(7), "key", DataType::Int, 1, true, false)
             .build()
             .unwrap_err();
         assert_eq!(error, SchemaError::MissingPrimaryKeyOrder);
@@ -935,8 +1017,8 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_019_reject_an_unknown_primary_key_column_id() {
         let result = Schema::builder(17)
-            .column(ColumnId::new(42), "key", DataType::Int, 0, true)
-            .column(ColumnId::new(7), "label", DataType::String, 1, false)
+            .column(ColumnId::new(42), "key", DataType::Int, 0, true, false)
+            .column(ColumnId::new(7), "label", DataType::String, 1, false, false)
             .pk(vec![ColumnId::new(42), ColumnId::new(999)])
             .build();
         assert!(result.is_err());
@@ -947,8 +1029,8 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_020_reject_a_repeated_primary_key_column_id() {
         let result = Schema::builder(17)
-            .column(ColumnId::new(42), "key", DataType::Int, 0, true)
-            .column(ColumnId::new(7), "label", DataType::String, 1, false)
+            .column(ColumnId::new(42), "key", DataType::Int, 0, true, false)
+            .column(ColumnId::new(7), "label", DataType::String, 1, false, false)
             .pk(vec![ColumnId::new(42), ColumnId::new(42)])
             .build();
         assert!(result.is_err());
@@ -959,8 +1041,8 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_021_reject_an_ordering_list_that_omits_a_marked_primary_key_column() {
         let result = Schema::builder(17)
-            .column(ColumnId::new(42), "tenant", DataType::Int, 0, true)
-            .column(ColumnId::new(7), "record", DataType::String, 1, true)
+            .column(ColumnId::new(42), "tenant", DataType::Int, 0, true, false)
+            .column(ColumnId::new(7), "record", DataType::String, 1, true, false)
             .pk(vec![ColumnId::new(42)])
             .build();
         assert!(result.is_err());
@@ -971,8 +1053,8 @@ mod test_cases {
     #[test]
     fn tc_schema_bld_022_reject_an_ordering_list_that_includes_an_unmarked_column() {
         let result = Schema::builder(17)
-            .column(ColumnId::new(42), "key", DataType::Int, 0, true)
-            .column(ColumnId::new(7), "label", DataType::String, 1, false)
+            .column(ColumnId::new(42), "key", DataType::Int, 0, true, false)
+            .column(ColumnId::new(7), "label", DataType::String, 1, false, false)
             .pk(vec![ColumnId::new(42), ColumnId::new(7)])
             .build();
         assert!(result.is_err());
@@ -982,10 +1064,17 @@ mod test_cases {
     #[test]
     fn tc_schema_ord_001_sort_columns_by_position_independently_of_insertion_and_id_order() {
         let schema = Schema::builder(17)
-            .column(ColumnId::new(42), "third", DataType::Int, 2, false)
-            .column(ColumnId::new(7), "first", DataType::String, 0, false)
-            .column(ColumnId::new(100), "fourth", DataType::String, 3, false)
-            .column(ColumnId::new(23), "second", DataType::Int, 1, false)
+            .column(ColumnId::new(42), "third", DataType::Int, 2, false, false)
+            .column(ColumnId::new(7), "first", DataType::String, 0, false, false)
+            .column(
+                ColumnId::new(100),
+                "fourth",
+                DataType::String,
+                3,
+                false,
+                false,
+            )
+            .column(ColumnId::new(23), "second", DataType::Int, 1, false, false)
             .build()
             .unwrap();
         let columns: Vec<_> = schema.columns_sorted().collect();
