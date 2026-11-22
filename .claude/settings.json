@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 .claude/skills/azure-devops-boards/scripts/azdo.py get:*)",
+      "Bash(python3 .claude/skills/azure-devops-boards/scripts/azdo.py query:*)",
+      "Bash(python3 .claude/skills/azure-devops-boards/scripts/azdo.py comments:*)",
+      "Bash(python3 .claude/skills/azure-devops-boards/scripts/azdo.py types:*)"
+    ]
+  }
+}
